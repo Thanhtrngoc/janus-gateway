@@ -730,6 +730,7 @@ janus_session *janus_session_create(guint64 session_id) {
 		}
 	}
 	session = (janus_session *)g_malloc(sizeof(janus_session));
+	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_INFO, "Creating new session: %"SCNu64"; %p\n", session_id, session);
 	session->session_id = session_id;
 	janus_refcount_init(&session->ref, janus_session_free);
@@ -763,6 +764,7 @@ void janus_session_notify_event(janus_session *session, json_t *event) {
 		janus_request *source = janus_session_get_request(session);
 		if(source != NULL && source->transport != NULL) {
 			/* Send this to the transport client */
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 			JANUS_LOG(LOG_HUGE, "Sending event to %s (%p)\n", source->transport->get_package(), source->instance);
 			source->transport->send_message(source->instance, NULL, FALSE, event);
 		} else {
@@ -1055,6 +1057,7 @@ int janus_process_incoming_request(janus_request *request) {
 			}
 		}
 		/* Handle it */
+		JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 		session = janus_session_create(session_id);
 		if(session == NULL) {
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_UNKNOWN, "Memory error");
@@ -1079,6 +1082,7 @@ int janus_process_incoming_request(janus_request *request) {
 			uint64_t p = janus_uint64_hash(GPOINTER_TO_UINT(session->source->instance));
 			g_snprintf(id, sizeof(id), "%"SCNu64, p);
 			json_object_set_new(transport, "id", json_string(id));
+			JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 			janus_events_notify_handlers(JANUS_EVENT_TYPE_SESSION, JANUS_EVENT_SUBTYPE_NONE,
 				session_id, "created", transport);
 		}
@@ -1171,6 +1175,7 @@ int janus_process_incoming_request(janus_request *request) {
 		json_t *opaque = json_object_get(root, "opaque_id");
 		const char *opaque_id = opaque ? json_string_value(opaque) : NULL;
 		/* Create handle */
+		JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 		handle = janus_ice_handle_create(session, opaque_id, token_value);
 		if(handle == NULL) {
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_UNKNOWN, "Memory error");
@@ -1433,6 +1438,7 @@ int janus_process_incoming_request(janus_request *request) {
 				/* New session */
 				if(offer) {
 					/* Setup ICE locally (we received an offer) */
+					JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 					if(janus_ice_setup_local(handle, offer, audio, video, data, do_trickle) < 0) {
 						JANUS_LOG(LOG_ERR, "Error setting ICE locally\n");
 						janus_sdp_destroy(parsed_sdp);
@@ -2886,7 +2892,8 @@ int janus_process_success(janus_request *request, json_t *payload)
 	if(!request || !payload)
 		return -1;
 	/* Pass to the right transport plugin */
-	JANUS_LOG(LOG_HUGE, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	JANUS_LOG(LOG_INFO, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
 	return request->transport->send_message(request->instance, request->request_id, request->admin, payload);
 }
 
@@ -3464,6 +3471,7 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 		}
 	}
 	/* Send the event */
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_VERB, "[%"SCNu64"] Sending event to transport...\n", ice_handle->handle_id);
 	janus_session_notify_event(session, event);
 
@@ -3556,6 +3564,7 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 			janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_RFC4588_RTX);
 			/* Process SDP in order to setup ICE locally (this is going to result in an answer from the browser) */
 			janus_mutex_lock(&ice_handle->mutex);
+			JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 			if(janus_ice_setup_local(ice_handle, 0, audio, video, data, 1) < 0) {
 				JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error setting ICE locally\n", ice_handle->handle_id);
 				janus_sdp_destroy(parsed_sdp);

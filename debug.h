@@ -46,11 +46,11 @@ extern char *janus_log_global_prefix;
 /*! \brief Informational message */
 #define LOG_INFO     (4)
 /*! \brief Verbose message */
-#define LOG_VERB     (5)
+#define LOG_VERB     (4)
 /*! \brief Overly verbose message */
-#define LOG_HUGE     (6)
+#define LOG_HUGE     (4)
 /*! \brief Debug message (includes .c filename, function and line number) */
-#define LOG_DBG      (7)
+#define LOG_DBG      (4)
 /*! \brief Maximum level of debugging */
 #define LOG_MAX LOG_DBG
 

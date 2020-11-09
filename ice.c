@@ -1196,6 +1196,7 @@ janus_ice_handle *janus_ice_handle_create(void *core_session, const char *opaque
 		}
 	}
 	handle = (janus_ice_handle *)g_malloc0(sizeof(janus_ice_handle));
+	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_INFO, "Creating new handle in session %"SCNu64": %"SCNu64"; %p %p\n", session->session_id, handle_id, core_session, handle);
 	janus_refcount_init(&handle->ref, janus_ice_handle_free);
 	janus_refcount_increase(&session->ref);
@@ -3382,6 +3383,7 @@ int janus_ice_setup_local(janus_ice_handle *handle, int offer, int audio, int vi
 
 	/* Note: NICE_COMPATIBILITY_RFC5245 is only available in more recent versions of libnice */
 	handle->controlling = janus_ice_lite_enabled ? FALSE : !offer;
+	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_INFO, "[%"SCNu64"] Creating ICE agent (ICE %s mode, %s)\n", handle->handle_id,
 		janus_ice_lite_enabled ? "Lite" : "Full", handle->controlling ? "controlling" : "controlled");
 	handle->agent = g_object_new(NICE_TYPE_AGENT,
@@ -4087,6 +4089,7 @@ static gboolean janus_ice_outgoing_traffic_handle(janus_ice_handle *handle, janu
 	janus_session *session = (janus_session *)handle->session;
 	janus_ice_stream *stream = handle->stream;
 	janus_ice_component *component = stream ? stream->component : NULL;
+	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	if(pkt == &janus_ice_start_gathering) {
 		/* Start gathering candidates */
 		if(handle->agent == NULL) {
@@ -4913,6 +4916,7 @@ void janus_ice_dtls_handshake_done(janus_ice_handle *handle, janus_ice_component
 	g_source_set_priority(handle->stats_source, G_PRIORITY_DEFAULT);
 	g_source_attach(handle->stats_source, handle->mainctx);
 	janus_mutex_unlock(&handle->mutex);
+	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_INFO, "[%"SCNu64"] The DTLS handshake has been completed\n", handle->handle_id);
 	/* Notify the plugin that the WebRTC PeerConnection is ready to be used */
 	janus_plugin *plugin = (janus_plugin *)handle->app;
