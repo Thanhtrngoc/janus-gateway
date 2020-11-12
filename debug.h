@@ -50,7 +50,7 @@ extern char *janus_log_global_prefix;
 /*! \brief Overly verbose message */
 #define LOG_HUGE     (4)
 /*! \brief Debug message (includes .c filename, function and line number) */
-#define LOG_DBG      (4)
+#define LOG_DBG      (7)
 /*! \brief Maximum level of debugging */
 #define LOG_MAX LOG_DBG
 
