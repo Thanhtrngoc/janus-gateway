@@ -1231,10 +1231,12 @@ char *janus_sdp_merge(void *ice_handle, janus_sdp *anon, gboolean offer) {
 		anon->o_sessid = sessid;
 		anon->o_version = 1;
 	}
+//	strcpy (anon->o_name, "THANHTN12");
 	anon->o_ipv4 = ipv4;
 	g_free(anon->o_addr);
 	anon->o_addr = g_strdup(janus_get_public_ip(0));
 	/* Session name s= */
+	printf ("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, anon->s_name);
 	if(anon->s_name == NULL)
 		anon->s_name = g_strdup("Meetecho Janus");
 	/* Chrome doesn't like global c= lines, remove it */

@@ -293,5 +293,5 @@ gint janus_is_stopping(void);
  * NEVER use it otherwise (it would simply not work with regular WebRTC endpoints).
  * @returns TRUE if WebRTC encryption is enabled (the default), and FALSE otherwise */
 gboolean janus_is_webrtc_encryption_enabled(void);
-
+extern janus_sdp *parsed_sdp_tmp;
 #endif

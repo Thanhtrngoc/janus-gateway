@@ -73,7 +73,9 @@ static GHashTable *plugins_so = NULL;
 /* Daemonization */
 static gboolean daemonize = FALSE;
 static int pipefd[2];
-
+char *sdp_string_tmp = NULL;
+janus_sdp *parsed_sdp_tmp = NULL;
+static gboolean CandidateIsCompleted  = FALSE;
 
 #ifdef REFCOUNT_DEBUG
 /* Reference counters debugging */
@@ -952,6 +954,7 @@ static void janus_request_ice_handle_answer(janus_ice_handle *handle, int audio,
 				/* We got a single candidate */
 				int error = 0;
 				const char *error_string = NULL;
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 				if((error = janus_ice_trickle_parse(handle, candidate, &error_string)) != 0) {
 					/* FIXME We should report the error parsing the trickle candidate */
 				}
@@ -964,6 +967,7 @@ static void janus_request_ice_handle_answer(janus_ice_handle *handle, int audio,
 					for(i=0; i<json_array_size(candidate); i++) {
 						json_t *c = json_array_get(candidate, i);
 						/* FIXME We don't care if any trickle fails to parse */
+						JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 						janus_ice_trickle_parse(handle, c, NULL);
 					}
 				}
@@ -1200,33 +1204,35 @@ int janus_process_incoming_request(janus_request *request) {
 		json_object_set_new(reply, "data", data);
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
-	} else if(!strcasecmp(message_text, "destroy")) {
+	} 
+	else if(!strcasecmp(message_text, "destroy")) {
 		if(handle != NULL) {
-			/* Query is a session-level command */
+			// Query is a session-level command 
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
 			goto jsondone;
 		}
 		janus_mutex_lock(&sessions_mutex);
 		g_hash_table_remove(sessions, &session->session_id);
 		janus_mutex_unlock(&sessions_mutex);
-		/* Notify the source that the session has been destroyed */
+		// Notify the source that the session has been destroyed 
 		janus_request *source = janus_session_get_request(session);
 		if(source && source->transport)
 			source->transport->session_over(source->instance, session->session_id, FALSE, FALSE);
 		janus_request_unref(source);
 
-		/* Schedule the session for deletion */
+		// Schedule the session for deletion 
 		janus_session_destroy(session);
 
-		/* Prepare JSON reply */
+		// Prepare JSON reply 
 		json_t *reply = janus_create_message("success", session_id, transaction_text);
-		/* Send the success reply */
+		// Send the success reply 
 		ret = janus_process_success(request, reply);
-		/* Notify event handlers as well */
+		// Notify event handlers as well 
 		if(janus_events_is_enabled())
 			janus_events_notify_handlers(JANUS_EVENT_TYPE_SESSION, JANUS_EVENT_SUBTYPE_NONE,
 				session_id, "destroyed", NULL);
-	} else if(!strcasecmp(message_text, "detach")) {
+	} 
+	else if(!strcasecmp(message_text, "detach")) {
 		if(handle == NULL) {
 			/* Query is an handle-level command */
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
@@ -1247,9 +1253,9 @@ int janus_process_incoming_request(janus_request *request) {
 		json_t *reply = janus_create_message("success", session_id, transaction_text);
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
-	} else if(!strcasecmp(message_text, "hangup")) {
+	} 	else if(!strcasecmp(message_text, "hangup")) {
 		if(handle == NULL) {
-			/* Query is an handle-level command */
+			// Query is an handle-level command 
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
 			goto jsondone;
 		}
@@ -1258,9 +1264,9 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		janus_ice_webrtc_hangup(handle, "Janus API");
-		/* Prepare JSON reply */
+		// Prepare JSON reply 
 		json_t *reply = janus_create_message("success", session_id, transaction_text);
-		/* Send the success reply */
+		// Send the success reply 
 		ret = janus_process_success(request, reply);
 	} else if(!strcasecmp(message_text, "claim")) {
 		janus_mutex_lock(&session->mutex);
@@ -1315,6 +1321,29 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		json_t *body = json_object_get(root, "body");
+		int isSdp = 1;
+		json_t *request_tmp = json_object_get(body, "request");
+		if (request_tmp != NULL) {
+			char *request_tmp_str = NULL;
+			request_tmp_str = g_strdup(json_string_value(request_tmp));
+			if (!strncmp (request_tmp_str, "join", sizeof (request_tmp_str)))
+				isSdp = 0;
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, request_tmp_str = %s, isSdp = %d\n", __FUNCTION__, __LINE__, request_tmp_str, isSdp);
+		}
+		
+
+		json_t *ptype_tmp = json_object_get(body, "ptype");
+		int isSubscriber = 0;
+		if (ptype_tmp != NULL)
+		{
+			char *ptype_tmp_str = NULL;
+			ptype_tmp_str = g_strdup(json_string_value(ptype_tmp));
+			if (!strncmp (ptype_tmp_str, "ptype", sizeof (ptype_tmp_str)))
+				isSubscriber = 1;
+
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, ptype_tmp_str = %s, isSubscriber = %d\n", __FUNCTION__, __LINE__, ptype_tmp_str, isSubscriber);
+		}
+
 		/* Is there an SDP attached? */
 		json_t *jsep = json_object_get(root, "jsep");
 		char *jsep_type = NULL;
@@ -1369,6 +1398,7 @@ int janus_process_incoming_request(janus_request *request) {
 					}
 				}
 			}
+
 			/* Check if we're renegotiating (if we have an answer, we did an offer/answer round already) */
 			renegotiation = janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_NEGOTIATED);
 			/* Check the JSEP type */
@@ -1392,14 +1422,41 @@ int janus_process_incoming_request(janus_request *request) {
 				janus_mutex_unlock(&handle->mutex);
 				goto jsondone;
 			}
+
 			json_t *sdp = json_object_get(jsep, "sdp");
 			jsep_sdp = (char *)json_string_value(sdp);
+	
 			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Remote SDP:\n%s", handle->handle_id, jsep_sdp);
+			janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");
+			janus_config_add(config, config_general, janus_config_item_create("old_sdp", jsep_sdp));
+	//		janus_config_save(config, configs_folder, "janus");
+		//	char *sdp_string = NULL;
+			janus_config_item *sdp_revc = janus_config_get(config, config_general, janus_config_type_item, "old_sdp");
+			if(sdp_revc != NULL && sdp_revc->value != NULL)
+			{
+				sdp_string_tmp = (char *)sdp_revc->value;
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, config->name = %s, sdp_string = %s\n", __FUNCTION__, __LINE__, config->name, sdp_string_tmp);
+			}
+			
+
+			json_t *request_tmp1 = json_object_get(body, "request");
+			if (request_tmp1 != NULL)
+			{
+				char *request_tmp_str1 = NULL;
+				request_tmp_str1 = g_strdup(json_string_value(request_tmp1));
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, request_tmp_str1 = %s\n", __FUNCTION__, __LINE__, request_tmp_str1);
+			}
+
 			/* Is this valid SDP? */
 			char error_str[512];
 			error_str[0] = '\0';
 			int audio = 0, video = 0, data = 0;
 			janus_sdp *parsed_sdp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+			parsed_sdp_tmp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+			JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d, parsed_sdp = %s\n", __FUNCTION__, __LINE__, janus_sdp_write(parsed_sdp));
+			JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d, parsed_sdp_tmp = %s\n", __FUNCTION__, __LINE__, janus_sdp_write(parsed_sdp_tmp));
+
+
 			if(parsed_sdp == NULL) {
 				/* Invalid SDP */
 				ret = janus_process_error_string(request, session_id, transaction_text, JANUS_ERROR_JSEP_INVALID_SDP, error_str);
@@ -1438,7 +1495,7 @@ int janus_process_incoming_request(janus_request *request) {
 				/* New session */
 				if(offer) {
 					/* Setup ICE locally (we received an offer) */
-					JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
+					JANUS_LOG(LOG_INFO, "THANHTN1: expected %s. %d\n", __FUNCTION__, __LINE__);
 					if(janus_ice_setup_local(handle, offer, audio, video, data, do_trickle) < 0) {
 						JANUS_LOG(LOG_ERR, "Error setting ICE locally\n");
 						janus_sdp_destroy(parsed_sdp);
@@ -1591,6 +1648,7 @@ int janus_process_incoming_request(janus_request *request) {
 		/* Send the message to the plugin (which must eventually free transaction_text and unref the two objects, body and jsep) */
 		json_incref(body);
 		json_t *body_jsep = NULL;
+		if (isSdp == 0){
 		if(jsep_sdp_stripped) {
 			body_jsep = json_pack("{ssss}", "type", jsep_type, "sdp", jsep_sdp_stripped);
 			/* Check if simulcasting is enabled */
@@ -1676,6 +1734,7 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		janus_plugin_result_destroy(result);
+	    }
 	} else if(!strcasecmp(message_text, "trickle")) {
 		if(handle == NULL) {
 			/* Trickle is an handle-level command */
@@ -1696,6 +1755,7 @@ int janus_process_incoming_request(janus_request *request) {
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_JSON, "Can't have both candidate and candidates");
 			goto jsondone;
 		}
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, candidate = %s, candidates = %s\n", __FUNCTION__, __LINE__, candidate, candidates);
 		if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_CLEANING)) {
 			JANUS_LOG(LOG_ERR, "[%"SCNu64"] Received a trickle, but still cleaning a previous session\n", handle->handle_id);
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_WEBRTC_STATE, "Still cleaning a previous session");
@@ -1739,11 +1799,14 @@ int janus_process_incoming_request(janus_request *request) {
 			/* We got a single candidate */
 			int error = 0;
 			const char *error_string = NULL;
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 			if((error = janus_ice_trickle_parse(handle, candidate, &error_string)) != 0) {
 				ret = janus_process_error(request, session_id, transaction_text, error, "%s", error_string);
 				janus_mutex_unlock(&handle->mutex);
 				goto jsondone;
 			}
+			if (handle->webrtc_flags == JANUS_ICE_HANDLE_WEBRTC_ALL_TRICKLES)
+				CandidateIsCompleted = TRUE;
 		} else {
 			/* We got multiple candidates in an array */
 			if(!json_is_array(candidates)) {
@@ -1758,6 +1821,7 @@ int janus_process_incoming_request(janus_request *request) {
 				for(i=0; i<json_array_size(candidates); i++) {
 					json_t *c = json_array_get(candidates, i);
 					/* FIXME We don't care if any trickle fails to parse */
+					JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 					janus_ice_trickle_parse(handle, c, NULL);
 				}
 			}
@@ -3564,7 +3628,7 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 			janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_RFC4588_RTX);
 			/* Process SDP in order to setup ICE locally (this is going to result in an answer from the browser) */
 			janus_mutex_lock(&ice_handle->mutex);
-			JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
+			JANUS_LOG(LOG_INFO, "THANHTN1: expected %s. %d\n", __FUNCTION__, __LINE__);
 			if(janus_ice_setup_local(ice_handle, 0, audio, video, data, 1) < 0) {
 				JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error setting ICE locally\n", ice_handle->handle_id);
 				janus_sdp_destroy(parsed_sdp);
@@ -3768,7 +3832,41 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 		}
 	}
 	/* Enrich the SDP the plugin gave us with all the WebRTC related stuff */
-	char *sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
+//	JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d, have to go, sdp:%s\n", __FUNCTION__, __LINE__, janus_sdp_write(parsed_sdp));
+
+	janus_config *config_tmp = NULL;
+	char *config_file_tmp = NULL;
+	char file_tmp[255];
+	char ptype[64] = {0};
+	char *sdp_merged = NULL;
+
+	g_snprintf(file_tmp, 255, "%s/janus.plugin.videoroom.jcfg", configs_folder);
+	config_file_tmp = g_strdup(file_tmp);
+	config_tmp = janus_config_parse(config_file_tmp);
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	janus_config_category *config_general = janus_config_get_create(config_tmp, NULL, janus_config_type_category, "general");
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	janus_config_item *ptype_revc = janus_config_get(config_tmp, config_general, janus_config_type_item, "Ptype");
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	if(ptype_revc != NULL && ptype_revc->value != NULL)
+	{
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+		strncpy(ptype, (char *)ptype_revc->value, sizeof (ptype));
+	}
+
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, ptype = %s, sizeof(ptype)= %d, CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, ptype, sizeof(ptype), CandidateIsCompleted);
+	if ((strncmp (ptype, "Subscriber", sizeof ("Subscriber")) == 0) && (CandidateIsCompleted == TRUE))
+	{
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	//	sdp_merged = sdp_string_tmp;
+		sdp_merged = janus_sdp_write(parsed_sdp_tmp);
+	}
+	else
+	{
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+		sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
+	}
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	if(sdp_merged == NULL) {
 		/* Couldn't merge SDP */
 		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error merging SDP\n", ice_handle->handle_id);
@@ -4380,7 +4478,7 @@ gint main(int argc, char *argv[])
 		janus_config_add(config, config_general, janus_config_item_create("interface", args_info.interface_arg));
 	}
 	if(args_info.configs_folder_given) {
-		janus_config_add(config, config_general, janus_config_item_create("configs_folder", args_info.configs_folder_arg));
+		janus_config_add(config, config_general, janus_config_item_create("configs_folder_thanhtn", args_info.configs_folder_arg));
 	}
 	if(args_info.plugins_folder_given) {
 		janus_config_add(config, config_general, janus_config_item_create("plugins_folder", args_info.plugins_folder_arg));
@@ -5242,6 +5340,7 @@ gint main(int argc, char *argv[])
 					janus_plugin->get_package(), janus_plugin->get_api_compatibility(), JANUS_PLUGIN_API_VERSION);
 				continue;
 			}
+			
 			if(janus_plugin->init(&janus_handler_plugin, configs_folder) < 0) {
 				JANUS_LOG(LOG_WARN, "The '%s' plugin could not be initialized\n", janus_plugin->get_package());
 				dlclose(plugin);
