@@ -767,8 +767,6 @@ char *janus_sdp_merge_edit_recv(janus_sdp *anon, char *candidate) {
 		return NULL;
 	}
 
-	JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d\n", __FUNCTION__, __LINE__);
-
 	GList *temp = anon->m_lines;
 	
 	while(temp) {
@@ -838,8 +836,7 @@ gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const 
 			return JANUS_ERROR_INVALID_ELEMENT_TYPE;
 		}
 		JANUS_LOG(LOG_VERB, "[%"SCNu64"] Trickle candidate (%s): %s\n", handle->handle_id, json_string_value(mid), json_string_value(rc));
-		if (parsed_sdp_tmp != NULL)		
-//			JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d, parsed_sdp_tmp = %s\n", __FUNCTION__, __LINE__, janus_sdp_write(parsed_sdp_tmp));
+		
 		janus_sdp_merge_edit_recv (parsed_sdp_tmp, json_string_value(rc));
 
 		/* Parse it */
@@ -1239,7 +1236,7 @@ janus_ice_handle *janus_ice_handle_create(void *core_session, const char *opaque
 		}
 	}
 	handle = (janus_ice_handle *)g_malloc0(sizeof(janus_ice_handle));
-	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
+	
 	JANUS_LOG(LOG_INFO, "Creating new handle in session %"SCNu64": %"SCNu64"; %p %p\n", session->session_id, handle_id, core_session, handle);
 	janus_refcount_init(&handle->ref, janus_ice_handle_free);
 	janus_refcount_increase(&session->ref);
@@ -1898,8 +1895,8 @@ static void janus_ice_cb_component_state_changed(NiceAgent *agent, guint stream_
 		if(component->icestate_source == NULL && component->icefailed_detected == 0) {
 			component->icefailed_detected = janus_get_monotonic_time();
 			component->icestate_source = g_timeout_source_new(500);
-		//	g_source_set_callback(component->icestate_source, janus_ice_check_failed, component, NULL);
-			g_source_set_callback(component->icestate_source, FALSE, component, NULL);
+			g_source_set_callback(component->icestate_source, janus_ice_check_failed, component, NULL);
+	//		g_source_set_callback(component->icestate_source, FALSE, component, NULL);
 			guint id = g_source_attach(component->icestate_source, handle->mainctx);
 			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Creating ICE state check timer with ID %u\n", handle->handle_id, id);
 		}
@@ -3427,7 +3424,7 @@ int janus_ice_setup_local(janus_ice_handle *handle, int offer, int audio, int vi
 
 	/* Note: NICE_COMPATIBILITY_RFC5245 is only available in more recent versions of libnice */
 	handle->controlling = janus_ice_lite_enabled ? FALSE : !offer;
-	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
+	
 	JANUS_LOG(LOG_INFO, "[%"SCNu64"] Creating ICE agent (ICE %s mode, %s)\n", handle->handle_id,
 		janus_ice_lite_enabled ? "Lite" : "Full", handle->controlling ? "controlling" : "controlled");
 	handle->agent = g_object_new(NICE_TYPE_AGENT,
@@ -3478,7 +3475,6 @@ int janus_ice_setup_local(janus_ice_handle *handle, int offer, int audio, int vi
 		}
 	}
 #endif
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	g_object_set(G_OBJECT(handle->agent), "upnp", FALSE, NULL);
 	g_object_set(G_OBJECT(handle->agent), "controlling-mode", handle->controlling, NULL);
 	g_signal_connect (G_OBJECT (handle->agent), "candidate-gathering-done",
@@ -4134,7 +4130,7 @@ static gboolean janus_ice_outgoing_traffic_handle(janus_ice_handle *handle, janu
 	janus_session *session = (janus_session *)handle->session;
 	janus_ice_stream *stream = handle->stream;
 	janus_ice_component *component = stream ? stream->component : NULL;
-//	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+
 	if(pkt == &janus_ice_start_gathering) {
 		/* Start gathering candidates */
 		if(handle->agent == NULL) {
@@ -4961,7 +4957,7 @@ void janus_ice_dtls_handshake_done(janus_ice_handle *handle, janus_ice_component
 	g_source_set_priority(handle->stats_source, G_PRIORITY_DEFAULT);
 	g_source_attach(handle->stats_source, handle->mainctx);
 	janus_mutex_unlock(&handle->mutex);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
+	
 	JANUS_LOG(LOG_INFO, "[%"SCNu64"] The DTLS handshake has been completed\n", handle->handle_id);
 	/* Notify the plugin that the WebRTC PeerConnection is ready to be used */
 	janus_plugin *plugin = (janus_plugin *)handle->app;

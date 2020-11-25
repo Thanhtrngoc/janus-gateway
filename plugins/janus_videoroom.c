@@ -2080,7 +2080,7 @@ int janus_videoroom_init(janus_callbacks *callback, const char *config_path, con
 		/* Invalid arguments */
 		return -1;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, sdp_recv = %s\n", __FUNCTION__, __LINE__, __FILE__, sdp_recv);
+	
 	/* Read configuration */
 	char filename[255];
 	config_path_tmp = config_path;
@@ -4886,7 +4886,6 @@ void janus_videoroom_setup_media(janus_plugin_session *handle) {
 }
 
 void janus_videoroom_incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *pkt) {
-//	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(handle == NULL || g_atomic_int_get(&handle->stopped) || g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
 	janus_videoroom_session *session = (janus_videoroom_session *)handle->plugin_handle;
@@ -5181,7 +5180,6 @@ void janus_videoroom_incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp
 }
 
 void janus_videoroom_incoming_rtcp(janus_plugin_session *handle, janus_plugin_rtcp *packet) {
-//	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
 	janus_videoroom_session *session = (janus_videoroom_session *)handle->plugin_handle;
@@ -5601,7 +5599,7 @@ static void *janus_videoroom_handler(void *data) {
 	int error_code = 0;
 	char error_cause[512];
 	json_t *root = NULL;
-	gboolean PtypeIsSubscriber = FALSE;
+//	gboolean PtypeIsSubscriber = FALSE;
 	janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");
 
 	JANUS_LOG (LOG_ERR, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
@@ -5715,10 +5713,11 @@ static void *janus_videoroom_handler(void *data) {
 			json_t *ptype = json_object_get(root, "ptype");
 			const char *ptype_text = json_string_value(ptype);
 			if(!strcasecmp(ptype_text, "publisher")) {
-				PtypeIsSubscriber = FALSE;
+/*				PtypeIsSubscriber = FALSE;
 				janus_config_add(config, config_general, janus_config_item_create("Ptype", "Other"));
 				janus_config_save(config, config_folder, JANUS_VIDEOROOM_PACKAGE);
 				JANUS_LOG(LOG_INFO, "THANHTN: have to go, false, %s, %d\n", __FUNCTION__, __LINE__);
+*/
 				JANUS_LOG(LOG_VERB, "Configuring new publisher\n");
 				JANUS_VALIDATE_JSON_OBJECT(root, publisher_parameters,
 					error_code, error_cause, TRUE,
@@ -6000,13 +5999,12 @@ static void *janus_videoroom_handler(void *data) {
 				janus_mutex_unlock(&publisher->room->mutex);
 				if(user_id_allocated)
 					g_free(user_id_str);
-
-			//	PtypeIsSubscriber = FALSE;
 			} else if(!strcasecmp(ptype_text, "subscriber") || !strcasecmp(ptype_text, "listener")) {
-				PtypeIsSubscriber = TRUE;
+/*				PtypeIsSubscriber = TRUE;
 				janus_config_add(config, config_general, janus_config_item_create("Ptype", "Subscriber"));
 				janus_config_save(config, config_folder, JANUS_VIDEOROOM_PACKAGE);
 				JANUS_LOG(LOG_INFO, "THANHTN: have to go true, %s, %d\n", __FUNCTION__, __LINE__);
+*/
 				JANUS_LOG(LOG_VERB, "Configuring new subscriber\n");
 				gboolean legacy = !strcasecmp(ptype_text, "listener");
 				if(legacy) {
@@ -6271,7 +6269,6 @@ static void *janus_videoroom_handler(void *data) {
 				g_snprintf(error_cause, 512, "Invalid element (ptype)");
 				goto error;
 			}
-		//	PtypeIsSubscriber = TRUE;
 		} else if(session->participant_type == janus_videoroom_p_type_publisher) {
 			/* Handle this publisher */
 			participant = janus_videoroom_session_get_publisher(session);
@@ -6295,7 +6292,6 @@ static void *janus_videoroom_handler(void *data) {
 				g_snprintf(error_cause, 512, "Already in as a publisher on this handle");
 				goto error;
 			} else if(!strcasecmp(request_text, "configure") || !strcasecmp(request_text, "publish")) {
-				JANUS_LOG(LOG_INFO, "THANHTN: Configure: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				if(!strcasecmp(request_text, "publish") && participant->sdp) {
 					janus_refcount_decrease(&participant->ref);
 					JANUS_LOG(LOG_ERR, "Can't publish, already published\n");
@@ -6580,7 +6576,6 @@ static void *janus_videoroom_handler(void *data) {
 				json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 				json_object_set_new(event, "started", json_string("ok"));
 			} else if(!strcasecmp(request_text, "configure")) {
-				JANUS_LOG(LOG_INFO, "THANHTN: Configure %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				JANUS_VALIDATE_JSON_OBJECT(root, configure_parameters,
 					error_code, error_cause, TRUE,
 					JANUS_VIDEOROOM_ERROR_MISSING_ELEMENT, JANUS_VIDEOROOM_ERROR_INVALID_ELEMENT);
@@ -7019,15 +7014,6 @@ static void *janus_videoroom_handler(void *data) {
 			}
 			janus_refcount_decrease(&subscriber->ref);
 		}
-		
-
-	//	janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");
-	//	if (PtypeIsSubscriber)
-	//		janus_config_add(config, config_general, janus_config_item_create("Ptype", "Subscriber"));
-	//	else
-	//		janus_config_add(config, config_general, janus_config_item_create("Ptype", "Other"));
-	//	janus_config_save(config, config_folder, JANUS_VIDEOROOM_PACKAGE);
-
 
 		/* Prepare JSON event */
 		JANUS_LOG(LOG_VERB, "Preparing JSON event as a reply\n");
@@ -7258,8 +7244,8 @@ static void *janus_videoroom_handler(void *data) {
 				/* Replace the session name */
 				g_free(answer->s_name);
 				char s_name[100];
-				g_snprintf(s_name, sizeof(s_name), "Smarthome VideoRoom %s", videoroom->room_id_str);
-				printf ("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, s_name);
+				g_snprintf(s_name, sizeof(s_name), "VideoRoom %s", videoroom->room_id_str);
+			
 				answer->s_name = g_strdup(s_name);
 				/* Which media are REALLY available? (some may have been rejected) */
 				participant->audio = FALSE;
@@ -7389,12 +7375,8 @@ static void *janus_videoroom_handler(void *data) {
 				janus_sdp_destroy(offer);
 				janus_sdp_destroy(answer);
 				/* Send the answer back to the publisher */
-				printf ("THANHTN: -----------------------------------------------------Start: %s, %d-----------------------------------------\n", __FUNCTION__, __LINE__);
-				JANUS_LOG(LOG_VERB, "Handling publisher: turned this into an answer '%s':\n%s, THANHTN12\n", type, answer_sdp);
-				printf ("THANHTN: -----------------------------------------------------End: %s, %d-----------------------------------------\n", __FUNCTION__, __LINE__);
-				printf ("THANHTN: -----------------------------------------------------Start 1: %s, %d-----------------------------------------\n", __FUNCTION__, __LINE__);
-                                JANUS_LOG(LOG_VERB, "Handling publisher: turned this into an offer '%s':\n%s, THANHTN12\n", type, offer_sdp);
-                                printf ("THANHTN: -----------------------------------------------------End  0: %s, %d-----------------------------------------\n", __FUNCTION__, __LINE__);
+				JANUS_LOG(LOG_VERB, "Handling publisher: turned this into an answer '%s':\n%s\n", type, answer_sdp);
+			
 				json_t *jsep = json_pack("{ssss}", "type", type, "sdp", answer_sdp);
 				g_free(answer_sdp);
 				if(e2ee)
@@ -7406,7 +7388,7 @@ static void *janus_videoroom_handler(void *data) {
 				/* How long will the Janus core take to push the event? */
 				g_atomic_int_set(&session->hangingup, 0);
 				gint64 start = janus_get_monotonic_time();
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, jPtypeIsSubscriber = %d, jsep = %s\n", __FUNCTION__, __LINE__, PtypeIsSubscriber,jsep);
+				
 				int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
 				JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
 
@@ -7417,35 +7399,8 @@ static void *janus_videoroom_handler(void *data) {
 				} else {
 					/* Store the participant's SDP for interested subscribers */
 					g_free(participant->sdp);
-				//	janus_config *config_tmp = NULL;
-				//	char *configs_folder_tmp = NULL;
-				//	char *config_file_tmp = NULL;
-					
-				//	char file_tmp[255];
-					
-				//	g_snprintf(file_tmp, 255, "%s/janus.jcfg", config_path_tmp);
-				//	config_file_tmp = g_strdup(file_tmp);
-				//	config_tmp = janus_config_parse(config_file_tmp);
+					participant->sdp = offer_sdp;
 
-				//	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, have to go, config_tmp->name = %s, file_tmp = %s\n", __FUNCTION__, __LINE__, config_tmp->name, file_tmp);
-				//	if (PtypeIsSubscriber == TRUE)
-				//	{
-				//		char *sdp_string = NULL;
-				//		janus_config_category *config_general = janus_config_get_create(config_tmp, NULL, janus_config_type_category, "general");
-
-				//		janus_config_item *sdp_revc = janus_config_get(config_tmp, config_general, janus_config_type_item, "old_sdp");
-				//		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, sdp_revc = %s\n", __FUNCTION__, __LINE__, sdp_revc);
-				//		if(sdp_revc != NULL && sdp_revc->value != NULL)
-				//		{
-				//			sdp_string = (char *)sdp_revc->value;
-
-				//		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, sdp_string = %s\n", __FUNCTION__, __LINE__, sdp_string);
-				//		}
-				//		participant->sdp = (char *)sdp_revc->value;
-				//	}
-				//	else
-						participant->sdp = offer_sdp;
-				//	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, have to go, PtypeIsSubscriber: %d, sdp:\n%s\n", __FUNCTION__, __LINE__, PtypeIsSubscriber, participant->sdp);
 					/* We'll wait for the setup_media event before actually telling subscribers */
 				}
 				/* Unless this is an update, in which case schedule a new offer for all viewers */

@@ -73,7 +73,6 @@ static GHashTable *plugins_so = NULL;
 /* Daemonization */
 static gboolean daemonize = FALSE;
 static int pipefd[2];
-char *sdp_string_tmp = NULL;
 janus_sdp *parsed_sdp_tmp = NULL;
 static gboolean CandidateIsCompleted  = FALSE;
 
@@ -89,6 +88,8 @@ static char *api_secret = NULL, *admin_api_secret = NULL;
 
 /* JSON parameters */
 static int janus_process_error_string(janus_request *request, uint64_t session_id, const char *transaction, gint error, gchar *error_string);
+static void init_handleSdpOffer (handleSdpOffer *packetInfo);
+static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
 
 static struct janus_json_parameter incoming_request_parameters[] = {
 	{"transaction", JSON_STRING, JANUS_JSON_PARAM_REQUIRED},
@@ -954,7 +955,6 @@ static void janus_request_ice_handle_answer(janus_ice_handle *handle, int audio,
 				/* We got a single candidate */
 				int error = 0;
 				const char *error_string = NULL;
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 				if((error = janus_ice_trickle_parse(handle, candidate, &error_string)) != 0) {
 					/* FIXME We should report the error parsing the trickle candidate */
 				}
@@ -967,7 +967,6 @@ static void janus_request_ice_handle_answer(janus_ice_handle *handle, int audio,
 					for(i=0; i<json_array_size(candidate); i++) {
 						json_t *c = json_array_get(candidate, i);
 						/* FIXME We don't care if any trickle fails to parse */
-						JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 						janus_ice_trickle_parse(handle, c, NULL);
 					}
 				}
@@ -1061,7 +1060,6 @@ int janus_process_incoming_request(janus_request *request) {
 			}
 		}
 		/* Handle it */
-		JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 		session = janus_session_create(session_id);
 		if(session == NULL) {
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_UNKNOWN, "Memory error");
@@ -1086,7 +1084,6 @@ int janus_process_incoming_request(janus_request *request) {
 			uint64_t p = janus_uint64_hash(GPOINTER_TO_UINT(session->source->instance));
 			g_snprintf(id, sizeof(id), "%"SCNu64, p);
 			json_object_set_new(transport, "id", json_string(id));
-			JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 			janus_events_notify_handlers(JANUS_EVENT_TYPE_SESSION, JANUS_EVENT_SUBTYPE_NONE,
 				session_id, "created", transport);
 		}
@@ -1179,7 +1176,6 @@ int janus_process_incoming_request(janus_request *request) {
 		json_t *opaque = json_object_get(root, "opaque_id");
 		const char *opaque_id = opaque ? json_string_value(opaque) : NULL;
 		/* Create handle */
-		JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 		handle = janus_ice_handle_create(session, opaque_id, token_value);
 		if(handle == NULL) {
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_UNKNOWN, "Memory error");
@@ -1321,25 +1317,30 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		json_t *body = json_object_get(root, "body");
-		int isSdp = 1;
 		json_t *request_tmp = json_object_get(body, "request");
-		if (request_tmp != NULL) {
+		gboolean isSdp = FALSE;
+		if (request_tmp != NULL)
+		{
 			char *request_tmp_str = NULL;
 			request_tmp_str = g_strdup(json_string_value(request_tmp));
 			if (!strncmp (request_tmp_str, "join", sizeof (request_tmp_str)))
-				isSdp = 0;
+				isSdp = FALSE;
+			else
+			{
+				isSdp = TRUE;	
+			}
+		
 			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, request_tmp_str = %s, isSdp = %d\n", __FUNCTION__, __LINE__, request_tmp_str, isSdp);
 		}
-		
 
 		json_t *ptype_tmp = json_object_get(body, "ptype");
-		int isSubscriber = 0;
+		gboolean isSubscriber = FALSE;
 		if (ptype_tmp != NULL)
 		{
 			char *ptype_tmp_str = NULL;
 			ptype_tmp_str = g_strdup(json_string_value(ptype_tmp));
 			if (!strncmp (ptype_tmp_str, "ptype", sizeof (ptype_tmp_str)))
-				isSubscriber = 1;
+				isSubscriber = TRUE;
 
 			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, ptype_tmp_str = %s, isSubscriber = %d\n", __FUNCTION__, __LINE__, ptype_tmp_str, isSubscriber);
 		}
@@ -1427,23 +1428,21 @@ int janus_process_incoming_request(janus_request *request) {
 			jsep_sdp = (char *)json_string_value(sdp);
 	
 			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Remote SDP:\n%s", handle->handle_id, jsep_sdp);
-			janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");
-			janus_config_add(config, config_general, janus_config_item_create("old_sdp", jsep_sdp));
-	//		janus_config_save(config, configs_folder, "janus");
-		//	char *sdp_string = NULL;
-			janus_config_item *sdp_revc = janus_config_get(config, config_general, janus_config_type_item, "old_sdp");
-			if(sdp_revc != NULL && sdp_revc->value != NULL)
-			{
-				sdp_string_tmp = (char *)sdp_revc->value;
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, config->name = %s, sdp_string = %s\n", __FUNCTION__, __LINE__, config->name, sdp_string_tmp);
-			}
-			
+			janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");	
 
 			json_t *request_tmp1 = json_object_get(body, "request");
 			if (request_tmp1 != NULL)
 			{
 				char *request_tmp_str1 = NULL;
 				request_tmp_str1 = g_strdup(json_string_value(request_tmp1));
+				if ((!strncmp (request_tmp_str, "start", sizeof (request_tmp_str))) ||
+					(!strncmp (request_tmp_str, "configure", sizeof (request_tmp_str))))
+					isSdp = TRUE;
+				else
+				{
+						isSdp = FALSE;
+				}
+				
 				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, request_tmp_str1 = %s\n", __FUNCTION__, __LINE__, request_tmp_str1);
 			}
 
@@ -1453,8 +1452,6 @@ int janus_process_incoming_request(janus_request *request) {
 			int audio = 0, video = 0, data = 0;
 			janus_sdp *parsed_sdp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
 			parsed_sdp_tmp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
-			JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d, parsed_sdp = %s\n", __FUNCTION__, __LINE__, janus_sdp_write(parsed_sdp));
-			JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d, parsed_sdp_tmp = %s\n", __FUNCTION__, __LINE__, janus_sdp_write(parsed_sdp_tmp));
 
 
 			if(parsed_sdp == NULL) {
@@ -1495,7 +1492,7 @@ int janus_process_incoming_request(janus_request *request) {
 				/* New session */
 				if(offer) {
 					/* Setup ICE locally (we received an offer) */
-					JANUS_LOG(LOG_INFO, "THANHTN1: expected %s. %d\n", __FUNCTION__, __LINE__);
+					JANUS_LOG(LOG_INFO, "THANHTN1: %s. %d\n", __FUNCTION__, __LINE__);
 					if(janus_ice_setup_local(handle, offer, audio, video, data, do_trickle) < 0) {
 						JANUS_LOG(LOG_ERR, "Error setting ICE locally\n");
 						janus_sdp_destroy(parsed_sdp);
@@ -1648,93 +1645,122 @@ int janus_process_incoming_request(janus_request *request) {
 		/* Send the message to the plugin (which must eventually free transaction_text and unref the two objects, body and jsep) */
 		json_incref(body);
 		json_t *body_jsep = NULL;
-		if (isSdp == 0){
-		if(jsep_sdp_stripped) {
-			body_jsep = json_pack("{ssss}", "type", jsep_type, "sdp", jsep_sdp_stripped);
-			/* Check if simulcasting is enabled */
-			if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_VIDEO)) {
-				if(handle->stream && (handle->stream->rid[0] || handle->stream->video_ssrc_peer[1])) {
-					json_t *simulcast = json_object();
-					/* If we have rids, pass those, otherwise pass the SSRCs */
-					if(handle->stream->rid[0]) {
-						json_t *rids = json_array();
-						if(handle->stream->rid[2])
-							json_array_append_new(rids, json_string(handle->stream->rid[2]));
-						if(handle->stream->rid[1])
-							json_array_append_new(rids, json_string(handle->stream->rid[1]));
-						json_array_append_new(rids, json_string(handle->stream->rid[0]));
-						json_object_set_new(simulcast, "rids", rids);
-						json_object_set_new(simulcast, "rid-ext", json_integer(handle->stream->rid_ext_id));
-					} else {
-						json_t *ssrcs = json_array();
-						json_array_append_new(ssrcs, json_integer(handle->stream->video_ssrc_peer[0]));
-						if(handle->stream->video_ssrc_peer[1])
-							json_array_append_new(ssrcs, json_integer(handle->stream->video_ssrc_peer[1]));
-						if(handle->stream->video_ssrc_peer[2])
-							json_array_append_new(ssrcs, json_integer(handle->stream->video_ssrc_peer[2]));
-						json_object_set_new(simulcast, "ssrcs", ssrcs);
+
+		GThread *handleSdp_thread = NULL;
+		handleSdpOffer *packetInfo = NULL;
+
+		init_handleSdpOffer (packetInfo);
+
+		handleSdp_thread = g_thread_try_new("Handle SDP Offer", vsm_handle_spd_response_for_client, packetInfo, &error);
+
+		if(error != NULL) {
+			/* We show the error but it's not fatal */
+			JANUS_LOG(LOG_ERR, "Got error %d (%s) trying to launch the handle Sdp response thread for Client\n",
+				error->code, error->message ? error->message : "??");
+			g_error_free(error);
+		}
+
+		if (isSdp)
+		{
+			packetInfo->jsep_type = jsep_type;
+			packetInfo->jsep_sdp_stripped = jsep_sdp_stripped;
+			packetInfo->handle = handle;
+			packetInfo->transaction_text = transaction_text;
+			packetInfo->session_id = session_id;
+			packetInfo->request = request;
+			packetInfo->renegotiation = renegotiation;
+			packetInfo->body = body;
+			packetInfo->plugin_t = plugin_t;
+			packetInfo->isSdp = isSdp;
+			packetInfo->isSubscriber = isSubscriber;
+		}
+		else{
+			if(jsep_sdp_stripped) {
+				body_jsep = json_pack("{ssss}", "type", jsep_type, "sdp", jsep_sdp_stripped);
+				/* Check if simulcasting is enabled */
+				if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_VIDEO)) {
+					if(handle->stream && (handle->stream->rid[0] || handle->stream->video_ssrc_peer[1])) {
+						json_t *simulcast = json_object();
+						/* If we have rids, pass those, otherwise pass the SSRCs */
+						if(handle->stream->rid[0]) {
+							json_t *rids = json_array();
+							if(handle->stream->rid[2])
+								json_array_append_new(rids, json_string(handle->stream->rid[2]));
+							if(handle->stream->rid[1])
+								json_array_append_new(rids, json_string(handle->stream->rid[1]));
+							json_array_append_new(rids, json_string(handle->stream->rid[0]));
+							json_object_set_new(simulcast, "rids", rids);
+							json_object_set_new(simulcast, "rid-ext", json_integer(handle->stream->rid_ext_id));
+						} else {
+							json_t *ssrcs = json_array();
+							json_array_append_new(ssrcs, json_integer(handle->stream->video_ssrc_peer[0]));
+							if(handle->stream->video_ssrc_peer[1])
+								json_array_append_new(ssrcs, json_integer(handle->stream->video_ssrc_peer[1]));
+							if(handle->stream->video_ssrc_peer[2])
+								json_array_append_new(ssrcs, json_integer(handle->stream->video_ssrc_peer[2]));
+							json_object_set_new(simulcast, "ssrcs", ssrcs);
+						}
+						if(handle->stream->framemarking_ext_id > 0)
+							json_object_set_new(simulcast, "framemarking-ext", json_integer(handle->stream->framemarking_ext_id));
+						json_object_set_new(body_jsep, "simulcast", simulcast);
 					}
-					if(handle->stream->framemarking_ext_id > 0)
-						json_object_set_new(simulcast, "framemarking-ext", json_integer(handle->stream->framemarking_ext_id));
-					json_object_set_new(body_jsep, "simulcast", simulcast);
 				}
+				/* Check if this is a renegotiation or update */
+				if(renegotiation)
+					json_object_set_new(body_jsep, "update", json_true());
+				/* If media is encrypted end-to-end, the plugin may need to know */
+				if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_E2EE))
+					json_object_set_new(body_jsep, "e2ee", json_true());
 			}
-			/* Check if this is a renegotiation or update */
-			if(renegotiation)
-				json_object_set_new(body_jsep, "update", json_true());
-			/* If media is encrypted end-to-end, the plugin may need to know */
-			if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_E2EE))
-				json_object_set_new(body_jsep, "e2ee", json_true());
-		}
-		janus_plugin_result *result = plugin_t->handle_message(handle->app_handle,
-			g_strdup((char *)transaction_text), body, body_jsep);
-		g_free(jsep_type);
-		g_free(jsep_sdp_stripped);
-		if(result == NULL) {
-			/* Something went horribly wrong! */
-			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_PLUGIN_MESSAGE, "Plugin didn't give a result");
-			goto jsondone;
-		}
-		if(result->type == JANUS_PLUGIN_OK) {
-			/* The plugin gave a result already (synchronous request/response) */
-			if(result->content == NULL || !json_is_object(result->content)) {
-				/* Missing content, or not a JSON object */
-				ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
-					result->content == NULL ?
-						"Plugin didn't provide any content for this synchronous response" :
-						"Plugin returned an invalid JSON response");
+			janus_plugin_result *result = plugin_t->handle_message(handle->app_handle,
+				g_strdup((char *)transaction_text), body, body_jsep);
+			g_free(jsep_type);
+			g_free(jsep_sdp_stripped);
+			if(result == NULL) {
+				/* Something went horribly wrong! */
+				ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_PLUGIN_MESSAGE, "Plugin didn't give a result");
+				goto jsondone;
+			}
+			if(result->type == JANUS_PLUGIN_OK) {
+				/* The plugin gave a result already (synchronous request/response) */
+				if(result->content == NULL || !json_is_object(result->content)) {
+					/* Missing content, or not a JSON object */
+					ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
+						result->content == NULL ?
+							"Plugin didn't provide any content for this synchronous response" :
+							"Plugin returned an invalid JSON response");
+					janus_plugin_result_destroy(result);
+					goto jsondone;
+				}
+				/* Reference the content, as destroying the result instance will decref it */
+				json_incref(result->content);
+				/* Prepare JSON response */
+				json_t *reply = janus_create_message("success", session->session_id, transaction_text);
+				json_object_set_new(reply, "sender", json_integer(handle->handle_id));
+				if(janus_is_opaqueid_in_api_enabled() && handle->opaque_id != NULL)
+					json_object_set_new(reply, "opaque_id", json_string(handle->opaque_id));
+				json_t *plugin_data = json_object();
+				json_object_set_new(plugin_data, "plugin", json_string(plugin_t->get_package()));
+				json_object_set_new(plugin_data, "data", result->content);
+				json_object_set_new(reply, "plugindata", plugin_data);
+				/* Send the success reply */
+				ret = janus_process_success(request, reply);
+			} else if(result->type == JANUS_PLUGIN_OK_WAIT) {
+				/* The plugin received the request but didn't process it yet, send an ack (asynchronous notifications may follow) */
+				json_t *reply = janus_create_message("ack", session_id, transaction_text);
+				if(result->text)
+					json_object_set_new(reply, "hint", json_string(result->text));
+				/* Send the success reply */
+				ret = janus_process_success(request, reply);
+			} else {
+				/* Something went horribly wrong! */
+				ret = janus_process_error_string(request, session_id, transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
+					(char *)(result->text ? result->text : "Plugin returned a severe (unknown) error"));
 				janus_plugin_result_destroy(result);
 				goto jsondone;
 			}
-			/* Reference the content, as destroying the result instance will decref it */
-			json_incref(result->content);
-			/* Prepare JSON response */
-			json_t *reply = janus_create_message("success", session->session_id, transaction_text);
-			json_object_set_new(reply, "sender", json_integer(handle->handle_id));
-			if(janus_is_opaqueid_in_api_enabled() && handle->opaque_id != NULL)
-				json_object_set_new(reply, "opaque_id", json_string(handle->opaque_id));
-			json_t *plugin_data = json_object();
-			json_object_set_new(plugin_data, "plugin", json_string(plugin_t->get_package()));
-			json_object_set_new(plugin_data, "data", result->content);
-			json_object_set_new(reply, "plugindata", plugin_data);
-			/* Send the success reply */
-			ret = janus_process_success(request, reply);
-		} else if(result->type == JANUS_PLUGIN_OK_WAIT) {
-			/* The plugin received the request but didn't process it yet, send an ack (asynchronous notifications may follow) */
-			json_t *reply = janus_create_message("ack", session_id, transaction_text);
-			if(result->text)
-				json_object_set_new(reply, "hint", json_string(result->text));
-			/* Send the success reply */
-			ret = janus_process_success(request, reply);
-		} else {
-			/* Something went horribly wrong! */
-			ret = janus_process_error_string(request, session_id, transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
-				(char *)(result->text ? result->text : "Plugin returned a severe (unknown) error"));
 			janus_plugin_result_destroy(result);
-			goto jsondone;
 		}
-		janus_plugin_result_destroy(result);
-	    }
 	} else if(!strcasecmp(message_text, "trickle")) {
 		if(handle == NULL) {
 			/* Trickle is an handle-level command */
@@ -3832,9 +3858,8 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 		}
 	}
 	/* Enrich the SDP the plugin gave us with all the WebRTC related stuff */
-//	JANUS_LOG(LOG_INFO, "THANHTN1: %s, %d, have to go, sdp:%s\n", __FUNCTION__, __LINE__, janus_sdp_write(parsed_sdp));
 
-	janus_config *config_tmp = NULL;
+/*	janus_config *config_tmp = NULL;
 	char *config_file_tmp = NULL;
 	char file_tmp[255];
 	char ptype[64] = {0};
@@ -3843,14 +3868,11 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 	g_snprintf(file_tmp, 255, "%s/janus.plugin.videoroom.jcfg", configs_folder);
 	config_file_tmp = g_strdup(file_tmp);
 	config_tmp = janus_config_parse(config_file_tmp);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	janus_config_category *config_general = janus_config_get_create(config_tmp, NULL, janus_config_type_category, "general");
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	janus_config_item *ptype_revc = janus_config_get(config_tmp, config_general, janus_config_type_item, "Ptype");
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	
 	if(ptype_revc != NULL && ptype_revc->value != NULL)
 	{
-		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 		strncpy(ptype, (char *)ptype_revc->value, sizeof (ptype));
 	}
 
@@ -3858,7 +3880,6 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 	if ((strncmp (ptype, "Subscriber", sizeof ("Subscriber")) == 0) && (CandidateIsCompleted == TRUE))
 	{
 		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
-	//	sdp_merged = sdp_string_tmp;
 		sdp_merged = janus_sdp_write(parsed_sdp_tmp);
 	}
 	else
@@ -3866,6 +3887,8 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 		sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
 	}
+*/
+	char sdp_merged = janus_sdp_write(parsed_sdp_tmp);
 	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	if(sdp_merged == NULL) {
 		/* Couldn't merge SDP */
@@ -5632,4 +5655,131 @@ gint main(int argc, char *argv[])
 	JANUS_PRINT("Bye!\n");
 
 	exit(0);
+}
+
+static void init_handleSdpOffer (handleSdpOffer *packetInfo)
+{
+	packetInfo->handle = NULL;
+	packetInfo->jsep_sdp = NULL;
+	packetInfo->jsep_sdp_stripped = NULL;
+	packetInfo->jsep_type = NULL;
+	packetInfo->transaction_text = NULL;
+	packetInfo->session_id = 0;
+	packetInfo->request = NULL;
+	packetInfo->renegotiation = FALSE;
+	packetInfo->body = NULL;
+	packetInfo->plugin_t = NULL;
+	packetInfo->isSdp = FALSE;
+	packetInfo->isSubscriber = FALSE;
+}
+
+static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
+{
+	json_t *body_jsep = NULL;
+	int ret = -1;
+
+
+
+	while (1){
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, packetInfo->isSubscriber = %d, CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, __FILE__, packetInfo->isSubscriber, CandidateIsCompleted);
+		if ((packetInfo->isSubscriber == TRUE) && (CandidateIsCompleted == TRUE))
+		{
+			if(packetInfo->jsep_sdp_stripped {
+				body_jsep = json_pack("{ssss}", "type", packetInfo->jsep_type, "sdp", packetInfo->jsep_sdp_stripped);
+				/* Check if simulcasting is enabled */
+				if(janus_flags_is_set(&packetInfo->handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_VIDEO)) {
+					if(packetInfo->handle->stream && (packetInfo->handle->stream->rid[0] || packetInfo->handle->stream->video_ssrc_peer[1])) {
+						json_t *simulcast = json_object();
+						/* If we have rids, pass those, otherwise pass the SSRCs */
+						if(packetInfo->handle->stream->rid[0]) {
+							json_t *rids = json_array();
+							if(packetInfo->handle->stream->rid[2])
+								json_array_append_new(rids, json_string(packetInfo->handle->stream->rid[2]));
+							if(packetInfo->handle->stream->rid[1])
+								json_array_append_new(rids, json_string(packetInfo->handle->stream->rid[1]));
+							json_array_append_new(rids, json_string(packetInfo->handle->stream->rid[0]));
+							json_object_set_new(simulcast, "rids", rids);
+							json_object_set_new(simulcast, "rid-ext", json_integer(packetInfo->handle->stream->rid_ext_id));
+						} else {
+							json_t *ssrcs = json_array();
+							json_array_append_new(ssrcs, json_integer(packetInfo->handle->stream->video_ssrc_peer[0]));
+							if(packetInfo->handle->stream->video_ssrc_peer[1])
+								json_array_append_new(ssrcs, json_integer(packetInfo->handle->stream->video_ssrc_peer[1]));
+							if(packetInfo->handle->stream->video_ssrc_peer[2])
+								json_array_append_new(ssrcs, json_integer(packetInfo->handle->stream->video_ssrc_peer[2]));
+							json_object_set_new(simulcast, "ssrcs", ssrcs);
+						}
+						if(packetInfo->handle->stream->framemarking_ext_id > 0)
+							json_object_set_new(simulcast, "framemarking-ext", json_integer(packetInfo->handle->stream->framemarking_ext_id));
+						json_object_set_new(body_jsep, "simulcast", simulcast);
+					}
+				}
+				/* Check if this is a renegotiation or update */
+				if(packetInfo->renegotiation)
+					json_object_set_new(body_jsep, "update", json_true());
+				/* If media is encrypted end-to-end, the plugin may need to know */
+				if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_E2EE))
+					json_object_set_new(body_jsep, "e2ee", json_true());
+			}
+			janus_plugin_result *result = plugin_t->handle_message(packetInfo->handle->app_handle,
+				g_strdup((char *)packetInfo->transaction_text), packetInfo->body, packetInfo->body_jsep);
+			g_free(packetInfo->jsep_type);
+			g_free(packetInfo->jsep_sdp_stripped);
+			if(result == NULL) {
+				/* Something went horribly wrong! */
+				ret = janus_process_error(packetInfo->request, packetInfo->session_id, packetInfo->transaction_text, JANUS_ERROR_PLUGIN_MESSAGE, "Plugin didn't give a result");
+				goto jsondone;
+			}
+			if(result->type == JANUS_PLUGIN_OK) {
+				/* The plugin gave a result already (synchronous request/response) */
+				if(result->content == NULL || !json_is_object(result->content)) {
+					/* Missing content, or not a JSON object */
+					ret = janus_process_error(packetInfo->request, packetInfo->session_id, packetInfo->transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
+						result->content == NULL ?
+							"Plugin didn't provide any content for this synchronous response" :
+							"Plugin returned an invalid JSON response");
+					janus_plugin_result_destroy(result);
+					goto jsondone;
+				}
+				/* Reference the content, as destroying the result instance will decref it */
+				json_incref(result->content);
+				/* Prepare JSON response */
+				json_t *reply = janus_create_message("success", packetInfo->session->session_id, packetInfo->transaction_text);
+				json_object_set_new(reply, "sender", json_integer(packetInfo->handle->handle_id));
+				if(janus_is_opaqueid_in_api_enabled() && packetInfo->handle->opaque_id != NULL)
+					json_object_set_new(reply, "opaque_id", json_string(packetInfo->handle->opaque_id));
+				json_t *plugin_data = json_object();
+				json_object_set_new(plugin_data, "plugin", json_string(packetInfo->plugin_t->get_package()));
+				json_object_set_new(plugin_data, "data", result->content);
+				json_object_set_new(reply, "plugindata", plugin_data);
+				/* Send the success reply */
+				ret = janus_process_success(packetInfo->request, reply);
+			} else if(result->type == JANUS_PLUGIN_OK_WAIT) {
+				/* The plugin received the request but didn't process it yet, send an ack (asynchronous notifications may follow) */
+				json_t *reply = janus_create_message("ack", packetInfo->session_id, packetInfo->transaction_text);
+				if(result->text)
+					json_object_set_new(reply, "hint", json_string(result->text));
+				/* Send the success reply */
+				ret = janus_process_success(packetInfo->request, reply);
+			} else {
+				/* Something went horribly wrong! */
+				ret = janus_process_error_string(packetInfo->request, packetInfo->session_id, packetInfo->transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
+					(char *)(result->text ? result->text : "Plugin returned a severe (unknown) error"));
+				janus_plugin_result_destroy(result);
+				goto jsondone;
+			}
+			janus_plugin_result_destroy(result);
+		}
+		sleep (1);
+	}
+
+jsondone:
+	/* Done processing */
+	if(handle != NULL)
+		janus_refcount_decrease(&handle->ref);
+	if(session != NULL)
+		janus_refcount_decrease(&session->ref);
+	g_thread_join(handleSdp_thread);
+		handleSdp_thread = NULL;
+	return NULL;	
 }
