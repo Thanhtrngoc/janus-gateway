@@ -1648,43 +1648,50 @@ int janus_process_incoming_request(janus_request *request) {
 		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		GThread *handleSdp_thread = NULL;
 		GError *error = NULL;
-//		packetInfo = init_handleSdpOffer ();	
+
 		if (isSdp)
 		{
 			packetInfo = init_handleSdpOffer ();
+
+/*
 			if ((packetInfo->jsep_type != NULL) && (jsep_type != NULL))
 				memcpy(packetInfo->jsep_type, jsep_type, MAX_ELEMENT);
-
 			if ((packetInfo->jsep_sdp_stripped != NULL) && (jsep_sdp_stripped != NULL))
 				memcpy(packetInfo->jsep_sdp_stripped, jsep_sdp_stripped, MAX_ELEMENT);	
-
 			if ((packetInfo->handle != NULL) && (handle != NULL))
 				memcpy (packetInfo->handle, handle, sizeof (janus_ice_handle));	
-
 			if ((packetInfo->transaction_text != NULL) && (transaction_text != NULL))
 				memcpy (packetInfo->transaction_text, transaction_text, BUF_128);
-
-			packetInfo->session_id = session_id;
-			
+			packetInfo->session_id = session_id;	
 			if ((packetInfo->request != NULL) && (request != NULL))
 			{		
 				memcpy(packetInfo->request, request, sizeof (packetInfo->request));
 				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 			}
-
 			packetInfo->renegotiation = renegotiation;
-
 			if ((packetInfo->body != NULL) && (body != NULL))				
 				memcpy (packetInfo->body, body, sizeof (json_t));	
-
 			if ((packetInfo->plugin_t != NULL) && (plugin_t != NULL))
 				memcpy (packetInfo->plugin_t, plugin_t, sizeof (janus_plugin));
-
 			packetInfo->isSdp = isSdp;
 			packetInfo->isSubscriber = isSubscriber;	
-
 			if ((packetInfo->session != NULL) && (session != NULL))
 				memcpy (packetInfo->session, session, sizeof (janus_session));
+*/
+
+			
+			packetInfo->jsep_type = jsep_type;
+			packetInfo->jsep_sdp_stripped  = jsep_sdp_stripped;	
+			packetInfo->handle =  handle;	
+			packetInfo->transaction_text = transaction_text;
+			packetInfo->session_id = session_id;	
+			packetInfo->request = request;	
+			packetInfo->renegotiation = renegotiation;
+			packetInfo->body = body;			
+			packetInfo->plugin_t = plugin_t;
+			packetInfo->isSdp = isSdp;
+			packetInfo->isSubscriber = isSubscriber;	
+			packetInfo->session, session;
 
 			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		}
@@ -1854,14 +1861,11 @@ int janus_process_incoming_request(janus_request *request) {
 			/* We got a single candidate */
 			int error = 0;
 			const char *error_string = NULL;
-			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 			if((error = janus_ice_trickle_parse(handle, candidate, &error_string)) != 0) {
 				ret = janus_process_error(request, session_id, transaction_text, error, "%s", error_string);
 				janus_mutex_unlock(&handle->mutex);
 				goto jsondone;
 			}
-//			if (handle->webrtc_flags == JANUS_ICE_HANDLE_WEBRTC_ALL_TRICKLES)
-//				CandidateIsCompleted = TRUE;
 			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse,CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, CandidateIsCompleted);
 		} else {
 			/* We got multiple candidates in an array */
@@ -1877,7 +1881,6 @@ int janus_process_incoming_request(janus_request *request) {
 				for(i=0; i<json_array_size(candidates); i++) {
 					json_t *c = json_array_get(candidates, i);
 					/* FIXME We don't care if any trickle fails to parse */
-					JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse\n", __FUNCTION__, __LINE__);
 					janus_ice_trickle_parse(handle, c, NULL);
 				}
 			}
@@ -3014,9 +3017,7 @@ int janus_process_success(janus_request *request, json_t *payload)
 	/* Pass to the right transport plugin */
 	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_INFO, "Hungnq: request id : %s. payload : %s \n ",request->request_id, json_string_value(payload));
-//	if ((request == NULL)|| (request->instance == NULL) || (payload == NULL))
-//		return -1;
-	//JANUS_LOG(LOG_INFO, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
+	JANUS_LOG(LOG_INFO, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
 	return request->transport->send_message(request->instance, request->request_id, request->admin, payload);
 }
 
@@ -3687,7 +3688,6 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 			janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_RFC4588_RTX);
 			/* Process SDP in order to setup ICE locally (this is going to result in an answer from the browser) */
 			janus_mutex_lock(&ice_handle->mutex);
-			JANUS_LOG(LOG_INFO, "THANHTN1: expected %s. %d\n", __FUNCTION__, __LINE__);
 			if(janus_ice_setup_local(ice_handle, 0, audio, video, data, 1) < 0) {
 				JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error setting ICE locally\n", ice_handle->handle_id);
 				janus_sdp_destroy(parsed_sdp);
@@ -4535,7 +4535,7 @@ gint main(int argc, char *argv[])
 		janus_config_add(config, config_general, janus_config_item_create("interface", args_info.interface_arg));
 	}
 	if(args_info.configs_folder_given) {
-		janus_config_add(config, config_general, janus_config_item_create("configs_folder_thanhtn", args_info.configs_folder_arg));
+		janus_config_add(config, config_general, janus_config_item_create("configs_folder", args_info.configs_folder_arg));
 	}
 	if(args_info.plugins_folder_given) {
 		janus_config_add(config, config_general, janus_config_item_create("plugins_folder", args_info.plugins_folder_arg));
@@ -5722,15 +5722,9 @@ static void *vsm_handle_spd_response_for_client ()
 
 	while (1){
 		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, __FILE__, CandidateIsCompleted);
-//		if ((packetInfo->isSubscriber == TRUE) && (CandidateIsCompleted == TRUE))
+
 		if (CandidateIsCompleted == TRUE)
 		{
-		/*	if ( (packetInfo->handle == NULL) || (packetInfo->session == NULL) || (packetInfo->jsep_sdp == NULL) || (packetInfo->jsep_sdp_stripped == NULL))
-			{
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, packetInfo is NULL\n", __FUNCTION__, __LINE__, __FILE__);
-				break;
-			}
-		*/
 			if(packetInfo->jsep_sdp_stripped) {
 				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				body_jsep = json_pack("{ssss}", "type", packetInfo->jsep_type, "sdp", packetInfo->jsep_sdp_stripped);
@@ -5774,18 +5768,6 @@ static void *vsm_handle_spd_response_for_client ()
 			}
 			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 
-			if (packetInfo->handle->app_handle == NULL)
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, packetInfo->handle->app_handle is NULL\n", __FUNCTION__, __LINE__, __FILE__);
-
-			if (packetInfo->body == NULL)
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, body is NULL\n", __FUNCTION__, __LINE__, __FILE__);
-
-			if (body_jsep == NULL)
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, body_jsep is NULL\n", __FUNCTION__, __LINE__, __FILE__);
-
-			if ((g_strdup((char *)packetInfo->transaction_text)) == NULL)
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s,transaction_text  is NULL\n", __FUNCTION__, __LINE__, __FILE__);
-
 			janus_plugin_result *result = packetInfo->plugin_t->handle_message(packetInfo->handle->app_handle,
 				g_strdup((char *)packetInfo->transaction_text), packetInfo->body, body_jsep);
 			g_free(packetInfo->jsep_type);
@@ -5798,7 +5780,6 @@ static void *vsm_handle_spd_response_for_client ()
 				goto jsondone;
 			}
 			if(result->type == JANUS_PLUGIN_OK) {
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				/* The plugin gave a result already (synchronous request/response) */
 				if(result->content == NULL || !json_is_object(result->content)) {
 					/* Missing content, or not a JSON object */
@@ -5809,7 +5790,7 @@ static void *vsm_handle_spd_response_for_client ()
 					janus_plugin_result_destroy(result);
 					goto jsondone;
 				}
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
+			
 				/* Reference the content, as destroying the result instance will decref it */
 				json_incref(result->content);
 				/* Prepare JSON response */
@@ -5821,7 +5802,6 @@ static void *vsm_handle_spd_response_for_client ()
 				json_object_set_new(plugin_data, "plugin", json_string(packetInfo->plugin_t->get_package()));
 				json_object_set_new(plugin_data, "data", result->content);
 				json_object_set_new(reply, "plugindata", plugin_data);
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				/* Send the success reply */
 				ret = janus_process_success(packetInfo->request, reply);
 			} else if(result->type == JANUS_PLUGIN_OK_WAIT) {

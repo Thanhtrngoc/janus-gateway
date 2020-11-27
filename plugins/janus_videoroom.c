@@ -4665,7 +4665,7 @@ prepare_response:
 struct janus_plugin_result *janus_videoroom_handle_message(janus_plugin_session *handle, char *transaction, json_t *message, json_t *jsep) {
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return janus_plugin_result_new(JANUS_PLUGIN_ERROR, g_atomic_int_get(&stopping) ? "Shutting down" : "Plugin not initialized", NULL);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	/* Pre-parse the message */
 	int error_code = 0;
 	char error_cause[512];
@@ -4673,9 +4673,9 @@ struct janus_plugin_result *janus_videoroom_handle_message(janus_plugin_session 
 	json_t *response = NULL;
 
 	janus_mutex_lock(&sessions_mutex);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	janus_videoroom_session *session = janus_videoroom_lookup_session(handle);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	if(!session) {
 		janus_mutex_unlock(&sessions_mutex);
 		JANUS_LOG(LOG_ERR, "No session associated with this handle...\n");
@@ -4683,7 +4683,7 @@ struct janus_plugin_result *janus_videoroom_handle_message(janus_plugin_session 
 		g_snprintf(error_cause, 512, "%s", "No session associated with this handle...");
 		goto plugin_response;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	/* Increase the reference counter for this session: we'll decrease it after we handle the message */
 	janus_refcount_increase(&session->ref);
 	janus_mutex_unlock(&sessions_mutex);
@@ -4693,40 +4693,38 @@ struct janus_plugin_result *janus_videoroom_handle_message(janus_plugin_session 
 		g_snprintf(error_cause, 512, "%s", "Session has already been marked as destroyed...");
 		goto plugin_response;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
 	if(message == NULL) {
 		JANUS_LOG(LOG_ERR, "No message??\n");
 		error_code = JANUS_VIDEOROOM_ERROR_NO_MESSAGE;
 		g_snprintf(error_cause, 512, "%s", "No message??");
 		goto plugin_response;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
 	if(!json_is_object(root)) {
 		JANUS_LOG(LOG_ERR, "JSON error: not an object\n");
 		error_code = JANUS_VIDEOROOM_ERROR_INVALID_JSON;
 		g_snprintf(error_cause, 512, "JSON error: not an object");
 		goto plugin_response;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-	if (root == NULL)
-		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		
 	/* Get the request first */
 	JANUS_VALIDATE_JSON_OBJECT(root, request_parameters,
 		error_code, error_cause, TRUE,
 		JANUS_VIDEOROOM_ERROR_MISSING_ELEMENT, JANUS_VIDEOROOM_ERROR_INVALID_ELEMENT);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	if(error_code != 0)
 		goto plugin_response;
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	json_t *request = json_object_get(root, "request");
 	/* Some requests ('create', 'destroy', 'exists', 'list') can be handled synchronously */
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	const char *request_text = json_string_value(request);
 	/* We have a separate method to process synchronous requests, as those may
 	 * arrive from the Admin API as well, and so we handle them the same way */
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
 	response = janus_videoroom_process_synchronous_request(session, root);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	if(response != NULL) {
 		/* We got a response, send it back */
 		goto plugin_response;
@@ -4735,14 +4733,12 @@ struct janus_plugin_result *janus_videoroom_handle_message(janus_plugin_session 
 			|| !strcasecmp(request_text, "start") || !strcasecmp(request_text, "pause") || !strcasecmp(request_text, "switch")
 			|| !strcasecmp(request_text, "leave")) {
 		/* These messages are handled asynchronously */
-		JANUS_LOG(LOG_INFO, "THANHTN: Configure: %s, %d, %s\n", __FUNCTION__, __LINE__, jsep);
 		janus_videoroom_message *msg = g_malloc(sizeof(janus_videoroom_message));
 		msg->handle = handle;
 		msg->transaction = transaction;
 		msg->message = root;
 		msg->jsep = jsep;
 		g_async_queue_push(messages, msg);
-		JANUS_LOG(LOG_INFO, "THANHTN: Configure: %s, %d, %s\n", __FUNCTION__, __LINE__, jsep);
 		return janus_plugin_result_new(JANUS_PLUGIN_OK_WAIT, NULL, NULL);
 	} else {
 		JANUS_LOG(LOG_VERB, "Unknown request '%s'\n", request_text);
@@ -4859,8 +4855,7 @@ void janus_videoroom_setup_media(janus_plugin_session *handle) {
 			json_object_set_new(pub, "videoroom", json_string("event"));
 			json_object_set_new(pub, "room", string_ids ? json_string(participant->room_id_str) : json_integer(participant->room_id));
 			json_t *list1 = json_object_get(list, "id");
-			if (list1 != NULL)
-				JANUS_LOG(LOG_INFO, "THANHTN: set list publisher %s. %d, list = %s\n", __FUNCTION__, __LINE__, g_strdup(json_string_value(list1)));
+			
 			json_object_set_new(pub, "publishers", list);
 			if (participant->room) {
 				janus_mutex_lock(&participant->room->mutex);
@@ -5354,7 +5349,7 @@ static void janus_videoroom_recorder_create(janus_videoroom_publisher *participa
 	char filename[255];
 	janus_recorder *rc = NULL;
 	gint64 now = janus_get_real_time();
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
 	if(audio && participant->arc == NULL) {
 		memset(filename, 0, 255);
 		if(participant->recording_base) {
@@ -5435,7 +5430,6 @@ static void janus_videoroom_recorder_create(janus_videoroom_publisher *participa
 }
 
 static void janus_videoroom_recorder_close(janus_videoroom_publisher *participant) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(participant->arc) {
 		janus_recorder *rc = participant->arc;
 		participant->arc = NULL;
@@ -5953,16 +5947,9 @@ static void *janus_videoroom_handler(void *data) {
 				g_hash_table_iter_init(&iter, publisher->room->participants);
 				while (!g_atomic_int_get(&publisher->room->destroyed) && g_hash_table_iter_next(&iter, NULL, &value)) {
 					janus_videoroom_publisher *p = value;
-					JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, p->display = %s, p->sdp = %s, p->user_id_str = %s\n", __FUNCTION__, __LINE__, __FILE__, p->display, p->sdp, p->user_id_str);
 					if(p == publisher || !p->sdp || !g_atomic_int_get(&p->session->started)) {
-						JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, p->display = %s, p->sdp = %s, p->user_id_str = %s\n", __FUNCTION__, __LINE__, __FILE__, p->display, p->sdp, p->user_id_str);
-						if (p != publisher)
-							JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, p->display = %s, p->sdp = %s, p->user_id_str = %s\n", __FUNCTION__, __LINE__, __FILE__, p->display, p->sdp, p->user_id_str);
-						if (publisher->room->notify_joining)
-							JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, p->display = %s, p->sdp = %s, p->user_id_str = %s\n", __FUNCTION__, __LINE__, __FILE__, p->display, p->sdp, p->user_id_str);
 						/* Check if we're also notifying normal joins and not just publishers */
 						if(p != publisher && publisher->room->notify_joining) {
-							JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, p->display = %s, p->sdp = %s, p->user_id_str = %s\n", __FUNCTION__, __LINE__, __FILE__, p->display, p->sdp, p->user_id_str);
 							json_t *al = json_object();
 							json_object_set_new(al, "id", string_ids ? json_string(p->user_id_str) : json_integer(p->user_id));
 							if(p->display)
@@ -5995,8 +5982,7 @@ static void *janus_videoroom_handler(void *data) {
 				json_object_set_new(event, "description", json_string(publisher->room->room_name));
 				json_object_set_new(event, "id", string_ids ? json_string(user_id_str) : json_integer(user_id));
 				json_object_set_new(event, "private_id", json_integer(publisher->pvt_id));
-				json_t *list1 = json_object_get(list, "id");
-			JANUS_LOG(LOG_INFO, "THANHTN: set list publisher %s. %d, list = %s\n", __FUNCTION__, __LINE__, json_string_value(list1));
+			
 				json_object_set_new(event, "publishers", list);
 				if(publisher->user_audio_active_packets)
 					json_object_set_new(event, "audio_active_packets", json_integer(publisher->user_audio_active_packets));
