@@ -74,8 +74,8 @@ static GHashTable *plugins_so = NULL;
 static gboolean daemonize = FALSE;
 static int pipefd[2];
 janus_sdp *parsed_sdp_tmp = NULL;
-static gboolean CandidateIsCompleted  = FALSE;
-
+gboolean CandidateIsCompleted  = FALSE;
+handleSdpOffer *packetInfo = NULL;
 #ifdef REFCOUNT_DEBUG
 /* Reference counters debugging */
 GHashTable *counters = NULL;
@@ -88,8 +88,8 @@ static char *api_secret = NULL, *admin_api_secret = NULL;
 
 /* JSON parameters */
 static int janus_process_error_string(janus_request *request, uint64_t session_id, const char *transaction, gint error, gchar *error_string);
-static void init_handleSdpOffer (handleSdpOffer *packetInfo);
-static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
+static handleSdpOffer *init_handleSdpOffer ();
+static void *vsm_handle_spd_response_for_client ();
 
 static struct janus_json_parameter incoming_request_parameters[] = {
 	{"transaction", JSON_STRING, JANUS_JSON_PARAM_REQUIRED},
@@ -1435,8 +1435,8 @@ int janus_process_incoming_request(janus_request *request) {
 			{
 				char *request_tmp_str1 = NULL;
 				request_tmp_str1 = g_strdup(json_string_value(request_tmp1));
-				if ((!strncmp (request_tmp_str, "start", sizeof (request_tmp_str))) ||
-					(!strncmp (request_tmp_str, "configure", sizeof (request_tmp_str))))
+				if ((!strncmp (request_tmp_str1, "start", sizeof (request_tmp_str1))) ||
+					(!strncmp (request_tmp_str1, "configure", sizeof (request_tmp_str1))))
 					isSdp = TRUE;
 				else
 				{
@@ -1452,7 +1452,7 @@ int janus_process_incoming_request(janus_request *request) {
 			int audio = 0, video = 0, data = 0;
 			janus_sdp *parsed_sdp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
 			parsed_sdp_tmp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
-
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 
 			if(parsed_sdp == NULL) {
 				/* Invalid SDP */
@@ -1645,36 +1645,62 @@ int janus_process_incoming_request(janus_request *request) {
 		/* Send the message to the plugin (which must eventually free transaction_text and unref the two objects, body and jsep) */
 		json_incref(body);
 		json_t *body_jsep = NULL;
-
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		GThread *handleSdp_thread = NULL;
-		handleSdpOffer *packetInfo = NULL;
+		GError *error = NULL;
+//		packetInfo = init_handleSdpOffer ();	
+		if (isSdp)
+		{
+			packetInfo = init_handleSdpOffer ();
+			if ((packetInfo->jsep_type != NULL) && (jsep_type != NULL))
+				memcpy(packetInfo->jsep_type, jsep_type, MAX_ELEMENT);
 
-		init_handleSdpOffer (packetInfo);
+			if ((packetInfo->jsep_sdp_stripped != NULL) && (jsep_sdp_stripped != NULL))
+				memcpy(packetInfo->jsep_sdp_stripped, jsep_sdp_stripped, MAX_ELEMENT);	
 
-		handleSdp_thread = g_thread_try_new("Handle SDP Offer", vsm_handle_spd_response_for_client, packetInfo, &error);
+			if ((packetInfo->handle != NULL) && (handle != NULL))
+				memcpy (packetInfo->handle, handle, sizeof (janus_ice_handle));	
 
+			if ((packetInfo->transaction_text != NULL) && (transaction_text != NULL))
+				memcpy (packetInfo->transaction_text, transaction_text, BUF_128);
+
+			packetInfo->session_id = session_id;
+			
+			if ((packetInfo->request != NULL) && (request != NULL))
+			{		
+				memcpy(packetInfo->request, request, sizeof (packetInfo->request));
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+			}
+
+			packetInfo->renegotiation = renegotiation;
+
+			if ((packetInfo->body != NULL) && (body != NULL))				
+				memcpy (packetInfo->body, body, sizeof (json_t));	
+
+			if ((packetInfo->plugin_t != NULL) && (plugin_t != NULL))
+				memcpy (packetInfo->plugin_t, plugin_t, sizeof (janus_plugin));
+
+			packetInfo->isSdp = isSdp;
+			packetInfo->isSubscriber = isSubscriber;	
+
+			if ((packetInfo->session != NULL) && (session != NULL))
+				memcpy (packetInfo->session, session, sizeof (janus_session));
+
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		}
+
+		handleSdp_thread = g_thread_try_new("Handle SDP Offer", vsm_handle_spd_response_for_client, NULL, &error);
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		if(error != NULL) {
-			/* We show the error but it's not fatal */
+			// We show the error but it's not fatal 
 			JANUS_LOG(LOG_ERR, "Got error %d (%s) trying to launch the handle Sdp response thread for Client\n",
 				error->code, error->message ? error->message : "??");
 			g_error_free(error);
 		}
-
-		if (isSdp)
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, isSdp = %d\n", __FUNCTION__, __LINE__, __FILE__, isSdp);
+		if (!isSdp)
 		{
-			packetInfo->jsep_type = jsep_type;
-			packetInfo->jsep_sdp_stripped = jsep_sdp_stripped;
-			packetInfo->handle = handle;
-			packetInfo->transaction_text = transaction_text;
-			packetInfo->session_id = session_id;
-			packetInfo->request = request;
-			packetInfo->renegotiation = renegotiation;
-			packetInfo->body = body;
-			packetInfo->plugin_t = plugin_t;
-			packetInfo->isSdp = isSdp;
-			packetInfo->isSubscriber = isSubscriber;
-		}
-		else{
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 			if(jsep_sdp_stripped) {
 				body_jsep = json_pack("{ssss}", "type", jsep_type, "sdp", jsep_sdp_stripped);
 				/* Check if simulcasting is enabled */
@@ -1803,9 +1829,12 @@ int janus_process_incoming_request(janus_request *request) {
 			goto trickledone;
 		}
 		/* Is the ICE stack ready already? */
-		if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER) ||
+	/*	if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER) ||
 				!janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER) ||
 				!janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_ANSWER)) {
+	*/
+		if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER) ||
+				!janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER)) {
 			const char *cause = NULL;
 			if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER))
 				cause = "processing the offer";
@@ -1831,8 +1860,9 @@ int janus_process_incoming_request(janus_request *request) {
 				janus_mutex_unlock(&handle->mutex);
 				goto jsondone;
 			}
-			if (handle->webrtc_flags == JANUS_ICE_HANDLE_WEBRTC_ALL_TRICKLES)
-				CandidateIsCompleted = TRUE;
+//			if (handle->webrtc_flags == JANUS_ICE_HANDLE_WEBRTC_ALL_TRICKLES)
+//				CandidateIsCompleted = TRUE;
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse,CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, CandidateIsCompleted);
 		} else {
 			/* We got multiple candidates in an array */
 			if(!json_is_array(candidates)) {
@@ -2983,7 +3013,10 @@ int janus_process_success(janus_request *request, json_t *payload)
 		return -1;
 	/* Pass to the right transport plugin */
 	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
-	JANUS_LOG(LOG_INFO, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
+	JANUS_LOG(LOG_INFO, "Hungnq: request id : %s. payload : %s \n ",request->request_id, json_string_value(payload));
+//	if ((request == NULL)|| (request->instance == NULL) || (payload == NULL))
+//		return -1;
+	//JANUS_LOG(LOG_INFO, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
 	return request->transport->send_message(request->instance, request->request_id, request->admin, payload);
 }
 
@@ -3888,7 +3921,8 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 		sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
 	}
 */
-	char sdp_merged = janus_sdp_write(parsed_sdp_tmp);
+	char *sdp_merged = janus_sdp_write(parsed_sdp_tmp);
+//	char *sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
 	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	if(sdp_merged == NULL) {
 		/* Couldn't merge SDP */
@@ -5657,34 +5691,48 @@ gint main(int argc, char *argv[])
 	exit(0);
 }
 
-static void init_handleSdpOffer (handleSdpOffer *packetInfo)
+static handleSdpOffer *init_handleSdpOffer ()
 {
-	packetInfo->handle = NULL;
-	packetInfo->jsep_sdp = NULL;
-	packetInfo->jsep_sdp_stripped = NULL;
-	packetInfo->jsep_type = NULL;
-	packetInfo->transaction_text = NULL;
+	handleSdpOffer *packetInfo = NULL;
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	packetInfo = (handleSdpOffer *)g_malloc(sizeof(handleSdpOffer));
+	packetInfo->handle = g_malloc0(sizeof(janus_ice_handle));
+	packetInfo->session = g_malloc0(sizeof(janus_session));
+	packetInfo->jsep_sdp = g_malloc0(MAX_ELEMENT);
+	packetInfo->jsep_sdp_stripped = g_malloc0(MAX_ELEMENT); 
+	packetInfo->jsep_type = g_malloc0(MAX_ELEMENT); 
+	packetInfo->transaction_text = g_malloc0(BUF_128);
 	packetInfo->session_id = 0;
-	packetInfo->request = NULL;
+	packetInfo->request = g_malloc0(sizeof(janus_request));
 	packetInfo->renegotiation = FALSE;
-	packetInfo->body = NULL;
-	packetInfo->plugin_t = NULL;
+	packetInfo->body = g_malloc0(sizeof(json_t));
+	packetInfo->plugin_t = g_malloc0(sizeof(janus_plugin));
 	packetInfo->isSdp = FALSE;
 	packetInfo->isSubscriber = FALSE;
+
+	return packetInfo;
 }
 
-static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
+static void *vsm_handle_spd_response_for_client ()
 {
 	json_t *body_jsep = NULL;
 	int ret = -1;
 
-
+	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, __FILE__, CandidateIsCompleted);
 
 	while (1){
-		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, packetInfo->isSubscriber = %d, CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, __FILE__, packetInfo->isSubscriber, CandidateIsCompleted);
-		if ((packetInfo->isSubscriber == TRUE) && (CandidateIsCompleted == TRUE))
+		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, __FILE__, CandidateIsCompleted);
+//		if ((packetInfo->isSubscriber == TRUE) && (CandidateIsCompleted == TRUE))
+		if (CandidateIsCompleted == TRUE)
 		{
-			if(packetInfo->jsep_sdp_stripped {
+		/*	if ( (packetInfo->handle == NULL) || (packetInfo->session == NULL) || (packetInfo->jsep_sdp == NULL) || (packetInfo->jsep_sdp_stripped == NULL))
+			{
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, packetInfo is NULL\n", __FUNCTION__, __LINE__, __FILE__);
+				break;
+			}
+		*/
+			if(packetInfo->jsep_sdp_stripped) {
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				body_jsep = json_pack("{ssss}", "type", packetInfo->jsep_type, "sdp", packetInfo->jsep_sdp_stripped);
 				/* Check if simulcasting is enabled */
 				if(janus_flags_is_set(&packetInfo->handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_VIDEO)) {
@@ -5700,6 +5748,7 @@ static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
 							json_array_append_new(rids, json_string(packetInfo->handle->stream->rid[0]));
 							json_object_set_new(simulcast, "rids", rids);
 							json_object_set_new(simulcast, "rid-ext", json_integer(packetInfo->handle->stream->rid_ext_id));
+							JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 						} else {
 							json_t *ssrcs = json_array();
 							json_array_append_new(ssrcs, json_integer(packetInfo->handle->stream->video_ssrc_peer[0]));
@@ -5708,29 +5757,48 @@ static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
 							if(packetInfo->handle->stream->video_ssrc_peer[2])
 								json_array_append_new(ssrcs, json_integer(packetInfo->handle->stream->video_ssrc_peer[2]));
 							json_object_set_new(simulcast, "ssrcs", ssrcs);
+							JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 						}
 						if(packetInfo->handle->stream->framemarking_ext_id > 0)
 							json_object_set_new(simulcast, "framemarking-ext", json_integer(packetInfo->handle->stream->framemarking_ext_id));
 						json_object_set_new(body_jsep, "simulcast", simulcast);
 					}
 				}
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				/* Check if this is a renegotiation or update */
 				if(packetInfo->renegotiation)
 					json_object_set_new(body_jsep, "update", json_true());
 				/* If media is encrypted end-to-end, the plugin may need to know */
-				if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_E2EE))
+				if(janus_flags_is_set(&packetInfo->handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_E2EE))
 					json_object_set_new(body_jsep, "e2ee", json_true());
 			}
-			janus_plugin_result *result = plugin_t->handle_message(packetInfo->handle->app_handle,
-				g_strdup((char *)packetInfo->transaction_text), packetInfo->body, packetInfo->body_jsep);
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if (packetInfo->handle->app_handle == NULL)
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, packetInfo->handle->app_handle is NULL\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if (packetInfo->body == NULL)
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, body is NULL\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if (body_jsep == NULL)
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, body_jsep is NULL\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if ((g_strdup((char *)packetInfo->transaction_text)) == NULL)
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s,transaction_text  is NULL\n", __FUNCTION__, __LINE__, __FILE__);
+
+			janus_plugin_result *result = packetInfo->plugin_t->handle_message(packetInfo->handle->app_handle,
+				g_strdup((char *)packetInfo->transaction_text), packetInfo->body, body_jsep);
 			g_free(packetInfo->jsep_type);
 			g_free(packetInfo->jsep_sdp_stripped);
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 			if(result == NULL) {
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				/* Something went horribly wrong! */
 				ret = janus_process_error(packetInfo->request, packetInfo->session_id, packetInfo->transaction_text, JANUS_ERROR_PLUGIN_MESSAGE, "Plugin didn't give a result");
 				goto jsondone;
 			}
 			if(result->type == JANUS_PLUGIN_OK) {
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				/* The plugin gave a result already (synchronous request/response) */
 				if(result->content == NULL || !json_is_object(result->content)) {
 					/* Missing content, or not a JSON object */
@@ -5741,6 +5809,7 @@ static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
 					janus_plugin_result_destroy(result);
 					goto jsondone;
 				}
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				/* Reference the content, as destroying the result instance will decref it */
 				json_incref(result->content);
 				/* Prepare JSON response */
@@ -5752,6 +5821,7 @@ static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
 				json_object_set_new(plugin_data, "plugin", json_string(packetInfo->plugin_t->get_package()));
 				json_object_set_new(plugin_data, "data", result->content);
 				json_object_set_new(reply, "plugindata", plugin_data);
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				/* Send the success reply */
 				ret = janus_process_success(packetInfo->request, reply);
 			} else if(result->type == JANUS_PLUGIN_OK_WAIT) {
@@ -5760,7 +5830,9 @@ static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
 				if(result->text)
 					json_object_set_new(reply, "hint", json_string(result->text));
 				/* Send the success reply */
-				ret = janus_process_success(packetInfo->request, reply);
+				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
+				JANUS_LOG(LOG_INFO, "Hungnq: reply : %s , transaction text : %s\n",json_string_value(reply),packetInfo->transaction_text);
+		//		ret = janus_process_success(packetInfo->request, reply);
 			} else {
 				/* Something went horribly wrong! */
 				ret = janus_process_error_string(packetInfo->request, packetInfo->session_id, packetInfo->transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
@@ -5769,17 +5841,17 @@ static void *vsm_handle_spd_response_for_client (handleSdpOffer *packetInfo)
 				goto jsondone;
 			}
 			janus_plugin_result_destroy(result);
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
+			CandidateIsCompleted = FALSE;
 		}
 		sleep (1);
 	}
 
 jsondone:
 	/* Done processing */
-	if(handle != NULL)
-		janus_refcount_decrease(&handle->ref);
-	if(session != NULL)
-		janus_refcount_decrease(&session->ref);
-	g_thread_join(handleSdp_thread);
-		handleSdp_thread = NULL;
+	if(packetInfo->handle != NULL)
+		janus_refcount_decrease(&packetInfo->handle->ref);
+	if(packetInfo->session != NULL)
+		janus_refcount_decrease(&packetInfo->session->ref);
 	return NULL;	
 }

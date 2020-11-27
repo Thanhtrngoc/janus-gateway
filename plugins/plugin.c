@@ -23,6 +23,7 @@ janus_plugin_result *janus_plugin_result_new(janus_plugin_result_type type, cons
 	result->type = type;
 	result->text = text;
 	result->content = content;
+	JANUS_LOG(LOG_INFO, "THANHTN: Configure: %s, %d\n", __FUNCTION__, __LINE__);
 	return result;
 }
 

@@ -294,9 +294,14 @@ gint janus_is_stopping(void);
  * @returns TRUE if WebRTC encryption is enabled (the default), and FALSE otherwise */
 gboolean janus_is_webrtc_encryption_enabled(void);
 extern janus_sdp *parsed_sdp_tmp;
+extern gboolean CandidateIsCompleted;
+
+#define MAX_ELEMENT 10000
+#define BUF_128 128
 
 typedef struct handleSdpOffer {
-	janus_plugin_session *handle;
+	janus_ice_handle *handle;
+	janus_session *session;
 	char *jsep_sdp; 
 	char *jsep_sdp_stripped;
 	char *jsep_type;

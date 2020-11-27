@@ -206,7 +206,9 @@ gboolean janus_json_is_valid(json_t *val, json_type jtype, unsigned int flags);
 		error_code = 0; \
 		unsigned int i; \
 		for(i = 0; i < sizeof(params) / sizeof(struct janus_json_parameter); i++) { \
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__); \
 			json_t *val = json_object_get(obj, params[i].name); \
+			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__); \
 			if(!val) { \
 				if((params[i].flags & JANUS_JSON_PARAM_REQUIRED) != 0) {	\
 					error_code = (missing_code); \

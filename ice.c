@@ -809,6 +809,7 @@ gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const 
 	if(!json_is_object(candidate) || json_object_get(candidate, "completed") != NULL) {
 		JANUS_LOG(LOG_VERB, "No more remote candidates for handle %"SCNu64"!\n", handle->handle_id);
 		janus_flags_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_ALL_TRICKLES);
+		CandidateIsCompleted = TRUE;
 		janus_sdp_merge_edit_recv (parsed_sdp_tmp, "completed");
 	} else {
 		/* Handle remote candidate */
@@ -1895,8 +1896,8 @@ static void janus_ice_cb_component_state_changed(NiceAgent *agent, guint stream_
 		if(component->icestate_source == NULL && component->icefailed_detected == 0) {
 			component->icefailed_detected = janus_get_monotonic_time();
 			component->icestate_source = g_timeout_source_new(500);
-			g_source_set_callback(component->icestate_source, janus_ice_check_failed, component, NULL);
-	//		g_source_set_callback(component->icestate_source, FALSE, component, NULL);
+	//		g_source_set_callback(component->icestate_source, janus_ice_check_failed, component, NULL);
+			g_source_set_callback(component->icestate_source, FALSE, component, NULL);
 			guint id = g_source_attach(component->icestate_source, handle->mainctx);
 			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Creating ICE state check timer with ID %u\n", handle->handle_id, id);
 		}
