@@ -2563,10 +2563,8 @@ static void janus_videoroom_notify_participants(janus_videoroom_publisher *parti
 		janus_videoroom_publisher *p = value;
 		if(p && p->session && (p != participant || notify_source_participant)) {
 			JANUS_LOG(LOG_VERB, "Notifying participant %s (%s)\n", p->user_id_str, p->display ? p->display : "??");
-			//THANHTN commented
-			JANUS_LOG(LOG_INFO, "THANHTN: commented push_event %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		//	int ret = gateway->push_event(p->session->handle, &janus_videoroom_plugin, NULL, msg, NULL);
-		//	JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
+			int ret = gateway->push_event(p->session->handle, &janus_videoroom_plugin, NULL, msg, NULL);
+			JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 		}
 	}
 }
@@ -3562,10 +3560,8 @@ static json_t *janus_videoroom_process_synchronous_request(janus_videoroom_sessi
 			if(p && p->session) {
 				g_clear_pointer(&p->room, janus_videoroom_room_dereference);
 				/* Notify the user we're going to destroy the room... */
-				//THANHTN: commented 3
-			JANUS_LOG(LOG_INFO, "THANHTN: comment 3 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-			//	int ret = gateway->push_event(p->session->handle, &janus_videoroom_plugin, NULL, destroyed, NULL);
-			//	JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
+				int ret = gateway->push_event(p->session->handle, &janus_videoroom_plugin, NULL, destroyed, NULL);
+				JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 				/* ... and then ask the core to close the PeerConnection */
 				gateway->close_pc(p->session->handle);
 			}
@@ -4385,11 +4381,9 @@ static json_t *janus_videoroom_process_synchronous_request(janus_videoroom_sessi
 		json_object_set_new(kicked, "room", string_ids ? json_string(participant->room_id_str) : json_integer(participant->room_id));
 		json_object_set_new(kicked, "leaving", json_string("ok"));
 		json_object_set_new(kicked, "reason", json_string("kicked"));
-		//THANHTN: commented 3
-		JANUS_LOG(LOG_INFO, "THANHTN: comment 3 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-//		int ret = gateway->push_event(participant->session->handle, &janus_videoroom_plugin, NULL, kicked, NULL);
-//		JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
-//		json_decref(kicked);
+		int ret = gateway->push_event(participant->session->handle, &janus_videoroom_plugin, NULL, kicked, NULL);
+		JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
+		json_decref(kicked);
 		janus_mutex_unlock(&videoroom->mutex);
 		/* If this room requires valid private_id values, we can kick subscriptions too */
 		if(videoroom->require_pvtid && participant->subscriptions != NULL) {
@@ -5325,9 +5319,7 @@ void janus_videoroom_slow_link(janus_plugin_session *handle, int uplink, int vid
 			/* Also add info on what the current bitrate cap is */
 			uint32_t bitrate = publisher->bitrate;
 			json_object_set_new(event, "current-bitrate", json_integer(bitrate));
-			//THANHTN commented
-			JANUS_LOG(LOG_INFO, "THANHTN: commented push_event %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		//	gateway->push_event(session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+			gateway->push_event(session->handle, &janus_videoroom_plugin, NULL, event, NULL);
 			json_decref(event);
 			janus_refcount_decrease(&publisher->ref);
 		} else {
@@ -5344,9 +5336,7 @@ void janus_videoroom_slow_link(janus_plugin_session *handle, int uplink, int vid
 			 * up to the application to then choose a policy and enforce it */
 			json_t *event = json_object();
 			json_object_set_new(event, "videoroom", json_string("slow_link"));
-			//THANHTN commented
-			JANUS_LOG(LOG_INFO, "THANHTN: commented push_event %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-	//		gateway->push_event(session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+			gateway->push_event(session->handle, &janus_videoroom_plugin, NULL, event, NULL);
 			json_decref(event);
 		} else {
 			JANUS_LOG(LOG_WARN, "Got a slow downlink on a VideoRoom viewer? Weird, because it doesn't send media...\n");
@@ -6264,9 +6254,9 @@ static void *janus_videoroom_handler(void *data) {
 						/* How long will the Janus core take to push the event? */
 						g_atomic_int_set(&session->hangingup, 0);
 						gint64 start = janus_get_monotonic_time();
-						JANUS_LOG(LOG_INFO, "THANHTN: to commented gateway->push_event %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-					//	int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
-					//	JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
+						//TODO ThanhTN
+						int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
+						JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
 						/* Also notify event handlers */
 						if(notify_events && gateway->events_is_enabled()) {
 							json_t *info = json_object();
@@ -6680,10 +6670,8 @@ static void *janus_videoroom_handler(void *data) {
 							json_object_set_new(event, "videoroom", json_string("event"));
 							json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 							json_object_set_new(event, "substream", json_integer(subscriber->sim_context.substream));
-							//THANHTN: commented 2
-							JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-						//	gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
-						//	json_decref(event);
+							gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
+							json_decref(event);
 						} else {
 							/* Send a FIR */
 							janus_videoroom_reqpli(publisher, "Simulcasting substream change");
@@ -6700,9 +6688,7 @@ static void *janus_videoroom_handler(void *data) {
 							json_object_set_new(event, "videoroom", json_string("event"));
 							json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 							json_object_set_new(event, "temporal", json_integer(subscriber->sim_context.templayer));
-							//THANHTN: commented 2
-							JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-						//	gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
+							gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
 							json_decref(event);
 						} else {
 							/* Send a FIR */
@@ -6726,9 +6712,7 @@ static void *janus_videoroom_handler(void *data) {
 							json_object_set_new(event, "videoroom", json_string("event"));
 							json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 							json_object_set_new(event, "spatial_layer", json_integer(subscriber->spatial_layer));
-							//THANHTN: commented 2
-				JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-						//	gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
+							gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
 							json_decref(event);
 						} else if(spatial_layer != subscriber->target_spatial_layer) {
 							/* Send a FIR to the new RTP forward publisher */
@@ -6747,9 +6731,7 @@ static void *janus_videoroom_handler(void *data) {
 							json_object_set_new(event, "videoroom", json_string("event"));
 							json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 							json_object_set_new(event, "temporal_layer", json_integer(subscriber->temporal_layer));
-							//THANHTN: commented 2
-				JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-					//		gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
+							gateway->push_event(msg->handle, &janus_videoroom_plugin, NULL, event, NULL);
 							json_decref(event);
 						}
 						subscriber->target_temporal_layer = temporal_layer;
@@ -7079,10 +7061,8 @@ static void *janus_videoroom_handler(void *data) {
 			} else if(!strcasecmp(msg_sdp_type, "answer")) {
 				/* We got an answer (from a subscriber?), no need to negotiate */
 				g_atomic_int_set(&session->hangingup, 0);
-				//THANHTN commented
-				JANUS_LOG(LOG_INFO, "THANHTN: commented push_event %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-				//int ret = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, NULL);
-			//	JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
+				int ret = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, NULL);
+				JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 				json_decref(event);
 				janus_videoroom_message_free(msg);
 				continue;
@@ -7427,13 +7407,11 @@ static void *janus_videoroom_handler(void *data) {
 				/* How long will the Janus core take to push the event? */
 				g_atomic_int_set(&session->hangingup, 0);
 				gint64 start = janus_get_monotonic_time();
+
 				JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		
-				//THANHTN commented
-				JANUS_LOG(LOG_INFO, "THANHTN: commented push_event %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);		
 				int res = 0;
-				//		int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
-		//		JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
+			//	int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
+			//	JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
 
 				/* Done */
 				if(res != JANUS_OK) {
@@ -7488,10 +7466,9 @@ error:
 			json_object_set_new(event, "videoroom", json_string("event"));
 			json_object_set_new(event, "error_code", json_integer(error_code));
 			json_object_set_new(event, "error", json_string(error_cause));
-			//THANHTN: commented 2
-			JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-	//		int ret = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, NULL);
-	//		JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (%s)\n", ret, janus_get_api_error(ret));
+		
+			int ret = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, NULL);
+			JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (%s)\n", ret, janus_get_api_error(ret));
 			json_decref(event);
 			janus_videoroom_message_free(msg);
 		}
@@ -7577,9 +7554,8 @@ static void janus_videoroom_relay_rtp_packet(gpointer data, gpointer user_data) 
 							subscriber->temporal_layer = 0;
 							json_object_set_new(event, "temporal_layer", json_integer(subscriber->temporal_layer));
 						}
-						//THANHTN commented
-				JANUS_LOG(LOG_INFO, "THANHTN: commented push_event %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-					//	gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+					
+						gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
 						json_decref(event);
 					}
 				}
@@ -7604,10 +7580,9 @@ static void janus_videoroom_relay_rtp_packet(gpointer data, gpointer user_data) 
 					json_object_set_new(event, "videoroom", json_string("event"));
 					json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 					json_object_set_new(event, "spatial_layer", json_integer(subscriber->spatial_layer));
-					//THANHTN: commented 3
-				JANUS_LOG(LOG_INFO, "THANHTN: comment 3 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-				//	gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
-				//	json_decref(event);
+				
+					gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+					json_decref(event);
 				}
 			}
 			if(spatial_layer < packet->svc_info.spatial_layer) {
@@ -7636,9 +7611,8 @@ static void janus_videoroom_relay_rtp_packet(gpointer data, gpointer user_data) 
 					json_object_set_new(event, "videoroom", json_string("event"));
 					json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 					json_object_set_new(event, "temporal_layer", json_integer(subscriber->temporal_layer));
-					//THANHTN: commented 2
-			JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-			//		gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+				
+					gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
 					json_decref(event);
 				}
 			} else if(subscriber->target_temporal_layer < subscriber->temporal_layer) {
@@ -7654,10 +7628,9 @@ static void janus_videoroom_relay_rtp_packet(gpointer data, gpointer user_data) 
 					json_object_set_new(event, "videoroom", json_string("event"));
 					json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 					json_object_set_new(event, "temporal_layer", json_integer(subscriber->temporal_layer));
-					//THANHTN: commented 2
-			JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-				//	gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
-				//	json_decref(event);
+					
+					gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+					json_decref(event);
 				}
 			}
 			if(temporal_layer < packet->svc_info.temporal_layer) {
@@ -7718,9 +7691,8 @@ static void janus_videoroom_relay_rtp_packet(gpointer data, gpointer user_data) 
 				json_object_set_new(event, "videoroom", json_string("event"));
 				json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 				json_object_set_new(event, "substream", json_integer(subscriber->sim_context.substream));
-				//THANHTN: commented 2
-				JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-			//	gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+				
+				gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
 				json_decref(event);
 			}
 			if(subscriber->sim_context.changed_temporal) {
@@ -7729,10 +7701,9 @@ static void janus_videoroom_relay_rtp_packet(gpointer data, gpointer user_data) 
 				json_object_set_new(event, "videoroom", json_string("event"));
 				json_object_set_new(event, "room", string_ids ? json_string(subscriber->room_id_str) : json_integer(subscriber->room_id));
 				json_object_set_new(event, "temporal", json_integer(subscriber->sim_context.templayer));
-				//THANHTN: commented 2
-				JANUS_LOG(LOG_INFO, "THANHTN: comment 2 : %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-			//	gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
-			//	json_decref(event);
+			
+				gateway->push_event(subscriber->session->handle, &janus_videoroom_plugin, NULL, event, NULL);
+				json_decref(event);
 			}
 			/* If we got here, update the RTP header and send the packet */
 			janus_rtp_header_update(packet->data, &subscriber->context, TRUE, 0);
