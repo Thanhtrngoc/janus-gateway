@@ -5812,7 +5812,7 @@ static void *vsm_handle_spd_response_for_client ()
 				/* Send the success reply */
 				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s, start process sdp response\n", __FUNCTION__, __LINE__, __FILE__);
 				JANUS_LOG(LOG_INFO, "Hungnq: reply : %s , transaction text : %s\n",json_string_value(reply),packetInfo->transaction_text);
-		//		ret = janus_process_success(packetInfo->request, reply);
+	//			ret = janus_process_success(packetInfo->request, reply);
 			} else {
 				/* Something went horribly wrong! */
 				ret = janus_process_error_string(packetInfo->request, packetInfo->session_id, packetInfo->transaction_text, JANUS_ERROR_PLUGIN_MESSAGE,
