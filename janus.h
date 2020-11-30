@@ -298,21 +298,26 @@ extern gboolean CandidateIsCompleted;
 
 #define MAX_ELEMENT 10000
 #define BUF_128 128
+#define MAX_ROOM 1000
 
-typedef struct handleSdpOffer {
-	janus_ice_handle *handle;
-	janus_session *session;
-	char *jsep_sdp; 
-	char *jsep_sdp_stripped;
-	char *jsep_type;
-	gchar *transaction_text;
-	guint64 session_id;
-	janus_request *request;
-	gboolean renegotiation;
-	json_t *body;
-	janus_plugin *plugin_t;
-	int isSdp;
-	int isSubscriber;
-} handleSdpOffer;
+
+// typedef struct room_info {
+// 	guint64 room_id;			/* Unique room ID (when using integers) */
+// 	gchar *room_id_str;			/* Unique room ID (when using strings) */
+// 	gchar *room_name_of_brower1;			/* Room description */
+// 	gchar *room_name_of_brower2;			/* Room description */
+// 	gchar *transaction_text_of_brower1;
+// 	gchar *transaction_text_of_brower2;
+// 	guint64 *session_id;
+// 	gchar *user_id_str_of_brower1;	/* feed_id, Unique ID in the room (when using strings) */
+// 	gchar *user_id_str_of_brower2;	/* feed_id, Unique ID in the room (when using strings) */
+// 	char *sdp_offer_request_configure; /* Sdp offer with request "configure" from brower, sdp_offer[0] for brower1, sdp_offer[1] for brower 2*/
+// 	char *sdp_answer_request_start; /* Sdp answer with request "start" from brower, sdp_answer[0] for brower1, sdp_answer[1] for brower 2*/
+// 	gboolean isCompletedCandidateOfBrower1; /*Brower1 sent "Completed Candidate"*/
+// 	gboolean isCompletedCandidateOfBrower2; /*Brower1 sent "Completed Candidate"*/
+// 	gboolean isSubscriber;
+
+// 	struct room_info *next; /*pointer to next element*/
+// } room_info;
 
 #endif

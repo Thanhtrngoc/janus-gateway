@@ -7408,6 +7408,11 @@ static void *janus_videoroom_handler(void *data) {
 				g_atomic_int_set(&session->hangingup, 0);
 				gint64 start = janus_get_monotonic_time();
 
+				while ((roomInfo = roomInfo->next) != NULL)
+				{
+					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->room_id = %d\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->room_id);
+				}
+
 				JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				int res = 0;
 			//	int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
