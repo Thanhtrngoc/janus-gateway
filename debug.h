@@ -125,11 +125,15 @@ typedef struct room_info {
 	char *sdp_answer_request_start; /* Sdp answer with request "start" from brower, sdp_answer[0] for brower1, sdp_answer[1] for brower 2*/
 	gboolean isCompletedCandidateOfBrower1; /*Brower1 sent "Completed Candidate"*/
 	gboolean isCompletedCandidateOfBrower2; /*Brower1 sent "Completed Candidate"*/
-	gboolean isSubscriber;
+	gboolean isSubscriberOfBrower2;
+	gboolean isSubscriberOfBrower1;
 
 	struct room_info *next; /*pointer to next element*/
 } room_info;
 
 extern room_info *roomInfo;
+extern int typeOfMessage;
+extern gboolean enableSdpStart;
 
 #endif
+

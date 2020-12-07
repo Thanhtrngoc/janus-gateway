@@ -1665,6 +1665,35 @@ typedef struct janus_videoroom_rtp_relay_packet {
 	gboolean textdata;
 } janus_videoroom_rtp_relay_packet;
 
+
+typedef struct janus_videoroom_handle_sdp {
+	janus_videoroom_message *msg;
+	json_t *event;
+	json_t *jsep;
+	janus_mutex vsm_mutex;
+}janus_videoroom_handle_sdp;
+
+static void *vsm_handle_spd_response_for_client ();
+janus_videoroom_handle_sdp *handleOfferSdp;
+janus_videoroom_handle_sdp *handleStartSdp;
+gboolean isSubOfVideoroom = FALSE;
+
+/*
+typedef struct janus_ice_handle janus_ice_handle;
+struct janus_ice_handle {
+	void *session;
+	guint64 handle_id;
+	char *opaque_id;
+	janus_refcount ref;
+	janus_flags webrtc_flags;
+};
+#define JANUS_ICE_HANDLE_WEBRTC_STOP				(1 << 3)
+*/
+#define BUF_128 128
+#define MAX_SIZE 10000
+
+
+
 /* Start / stop recording */
 static void janus_videoroom_recorder_create(janus_videoroom_publisher *participant, gboolean audio, gboolean video, gboolean data);
 static void janus_videoroom_recorder_close(janus_videoroom_publisher *participant);
@@ -1855,7 +1884,6 @@ static guint32 janus_videoroom_rtp_forwarder_add_helper(janus_videoroom_publishe
 	if(!p || !host) {
 		return 0;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	janus_mutex_lock(&p->rtp_forwarders_mutex);
 	/* Do we need to bind to a port for RTCP? */
 	int fd = -1;
@@ -2069,6 +2097,55 @@ static void janus_videoroom_srtp_context_free(gpointer data) {
 	}
 }
 
+void init_handleSdp ()
+{
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+	//init for handle Sdp Offer
+	handleOfferSdp = g_malloc0(sizeof(janus_videoroom_handle_sdp));
+	if (handleOfferSdp == NULL)
+	{
+		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		free (handleOfferSdp);
+	}
+
+	handleOfferSdp->msg = g_malloc0(sizeof(janus_videoroom_message));
+	if (handleOfferSdp->msg == NULL)
+	{
+		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		free (handleOfferSdp->msg);
+	}
+
+	handleOfferSdp->jsep = g_malloc0(sizeof(json_t));
+	if (handleOfferSdp->jsep == NULL)
+	{
+		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		free (handleOfferSdp->jsep);
+	}
+
+	// init for handle Sdp Start
+	handleStartSdp = g_malloc0(sizeof(janus_videoroom_handle_sdp));
+	if (handleStartSdp == NULL)
+	{
+		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		free (handleStartSdp);
+	}
+
+	handleStartSdp->msg = g_malloc0(sizeof(janus_videoroom_message));
+	if (handleStartSdp->msg == NULL)
+	{
+		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		free (handleStartSdp->msg);
+	}
+
+	handleStartSdp->jsep = g_malloc0(sizeof(json_t));
+	if (handleStartSdp->jsep == NULL)
+	{
+		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		free (handleStartSdp->jsep);
+	}
+}
+
 
 /* Plugin implementation */
 int janus_videoroom_init(janus_callbacks *callback, const char *config_path, const char *sdp_recv) {
@@ -2087,6 +2164,9 @@ int janus_videoroom_init(janus_callbacks *callback, const char *config_path, con
 	g_snprintf(filename, 255, "%s/%s.jcfg", config_path, JANUS_VIDEOROOM_PACKAGE);
 	JANUS_LOG(LOG_VERB, "Configuration file: %s\n", filename);
 	config = janus_config_parse(filename);
+	
+	init_handleSdp ();
+
 	if(config == NULL) {
 		JANUS_LOG(LOG_WARN, "Couldn't find .jcfg configuration file (%s), trying .cfg\n", JANUS_VIDEOROOM_PACKAGE);
 		g_snprintf(filename, 255, "%s/%s.cfg", config_path, JANUS_VIDEOROOM_PACKAGE);
@@ -2434,7 +2514,7 @@ void janus_videoroom_destroy(void) {
 	if(!g_atomic_int_get(&initialized))
 		return;
 	g_atomic_int_set(&stopping, 1);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	g_async_queue_push(messages, &exit_message);
 	if(handler_thread != NULL) {
 		g_thread_join(handler_thread);
@@ -2513,7 +2593,7 @@ void janus_videoroom_create_session(janus_plugin_session *handle, int *error) {
 		*error = -1;
 		return;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	janus_videoroom_session *session = g_malloc0(sizeof(janus_videoroom_session));
 	session->handle = handle;
 	session->participant_type = janus_videoroom_p_type_none;
@@ -2532,7 +2612,7 @@ void janus_videoroom_create_session(janus_plugin_session *handle, int *error) {
 }
 
 static janus_videoroom_publisher *janus_videoroom_session_get_publisher(janus_videoroom_session *session) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	janus_mutex_lock(&session->mutex);
 	janus_videoroom_publisher *publisher = (janus_videoroom_publisher *)session->participant;
 	if(publisher)
@@ -2552,7 +2632,7 @@ static janus_videoroom_publisher *janus_videoroom_session_get_publisher_nodebug(
 }
 
 static void janus_videoroom_notify_participants(janus_videoroom_publisher *participant, json_t *msg, gboolean notify_source_participant) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* participant->room->mutex has to be locked. */
 	if(participant->room == NULL)
 		return;
@@ -2571,7 +2651,7 @@ static void janus_videoroom_notify_participants(janus_videoroom_publisher *parti
 
 static void janus_videoroom_participant_joining(janus_videoroom_publisher *p) {
 	/* we need to check if the room still exists, may have been destroyed already */
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(p->room == NULL)
 		return;
 	if(!g_atomic_int_get(&p->room->destroyed) && p->room->notify_joining) {
@@ -2591,7 +2671,7 @@ static void janus_videoroom_participant_joining(janus_videoroom_publisher *p) {
 }
 
 static void janus_videoroom_leave_or_unpublish(janus_videoroom_publisher *participant, gboolean is_leaving, gboolean kicked) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* we need to check if the room still exists, may have been destroyed already */
 	if(participant->room == NULL)
 		return;
@@ -2642,7 +2722,7 @@ void janus_videoroom_destroy_session(janus_plugin_session *handle, int *error) {
 		*error = -1;
 		return;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	janus_mutex_lock(&sessions_mutex);
 	janus_videoroom_session *session = janus_videoroom_lookup_session(handle);
 	if(!session) {
@@ -2692,7 +2772,7 @@ json_t *janus_videoroom_query_session(janus_plugin_session *handle) {
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized)) {
 		return NULL;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	janus_mutex_lock(&sessions_mutex);
 	janus_videoroom_session *session = janus_videoroom_lookup_session(handle);
 	if(!session) {
@@ -2807,7 +2887,7 @@ static int janus_videoroom_access_room(json_t *root, gboolean check_modify, gboo
 	json_t *room = json_object_get(root, "room");
 	guint64 room_id = 0;
 	char room_id_num[30], *room_id_str = NULL;
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(!string_ids) {
 		room_id = json_integer_value(room);
 		g_snprintf(room_id_num, sizeof(room_id_num), "%"SCNu64, room_id);
@@ -2864,7 +2944,7 @@ static int janus_videoroom_access_room(json_t *root, gboolean check_modify, gboo
 static json_t *janus_videoroom_process_synchronous_request(janus_videoroom_session *session, json_t *message) {
 	json_t *request = json_object_get(message, "request");
 	const char *request_text = json_string_value(request);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* Parse the message */
 	int error_code = 0;
 	char error_cause[512];
@@ -4736,6 +4816,7 @@ struct janus_plugin_result *janus_videoroom_handle_message(janus_plugin_session 
 		janus_videoroom_message *msg = g_malloc(sizeof(janus_videoroom_message));
 		msg->handle = handle;
 		msg->transaction = transaction;
+		printf("THANHTN: %s, %d, %s, msg->transaction = %s\n", __FUNCTION__, __LINE__, __FILE__, g_strdup((char *)msg->transaction));
 		msg->message = root;
 		msg->jsep = jsep;
 		g_async_queue_push(messages, msg);
@@ -4778,7 +4859,7 @@ json_t *janus_videoroom_handle_admin_message(json_t *message) {
 	int error_code = 0;
 	char error_cause[512];
 	json_t *response = NULL;
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	JANUS_VALIDATE_JSON_OBJECT(message, request_parameters,
 		error_code, error_cause, TRUE,
 		JANUS_VIDEOROOM_ERROR_MISSING_ELEMENT, JANUS_VIDEOROOM_ERROR_INVALID_ELEMENT);
@@ -4810,7 +4891,7 @@ admin_response:
 }
 
 void janus_videoroom_setup_media(janus_plugin_session *handle) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
+	printf( "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_INFO, "[%s-%p] WebRTC media is now available\n", JANUS_VIDEOROOM_PACKAGE, handle);
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
@@ -5225,7 +5306,7 @@ void janus_videoroom_incoming_rtcp(janus_plugin_session *handle, janus_plugin_rt
 }
 
 void janus_videoroom_incoming_data(janus_plugin_session *handle, janus_plugin_data *packet) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(handle == NULL || g_atomic_int_get(&handle->stopped) || g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
 	if(packet->buffer == NULL || packet->length == 0)
@@ -5291,7 +5372,7 @@ void janus_videoroom_data_ready(janus_plugin_session *handle) {
 }
 
 void janus_videoroom_slow_link(janus_plugin_session *handle, int uplink, int video) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* The core is informing us that our peer got too many NACKs, are we pushing media too hard? */
 	if(handle == NULL || g_atomic_int_get(&handle->stopped) || g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
@@ -5475,7 +5556,7 @@ void janus_videoroom_hangup_media(janus_plugin_session *handle) {
 }
 
 static void janus_videoroom_hangup_subscriber(janus_videoroom_subscriber *s) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* Already hung up */
 	if (!s->feed) {
 		return;
@@ -5517,7 +5598,7 @@ static void janus_videoroom_hangup_media_internal(gpointer session_data) {
 	if(!g_atomic_int_compare_and_exchange(&session->hangingup, 0, 1)) {
 		return;
 	}
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	g_atomic_int_set(&session->dataready, 0);
 	/* Send an event to the browser and tell the PeerConnection is over */
 	if(session->participant_type == janus_videoroom_p_type_publisher) {
@@ -5611,7 +5692,7 @@ static void *janus_videoroom_handler(void *data) {
 //	gboolean PtypeIsSubscriber = FALSE;
 	janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");
 
-	JANUS_LOG (LOG_ERR, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	printf( "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	while(g_atomic_int_get(&initialized) && !g_atomic_int_get(&stopping)) {
 		msg = g_async_queue_pop(messages);
 		if(msg == &exit_message)
@@ -5957,7 +6038,7 @@ static void *janus_videoroom_handler(void *data) {
 							json_array_append_new(attendees, al);
 						}
 						if (p==publisher || !p->sdp){
-							JANUS_LOG(LOG_INFO,"hungnq24 :, display : %s, p->sdp is null :%d, skipping to next publisher in the list",p->display,!p->sdp);
+							printf("hungnq24 :, display : %s, p->sdp is null :%d, skipping to next publisher in the list",p->display,!p->sdp);
 							continue;
 						}
 					}
@@ -6254,9 +6335,26 @@ static void *janus_videoroom_handler(void *data) {
 						/* How long will the Janus core take to push the event? */
 						g_atomic_int_set(&session->hangingup, 0);
 						gint64 start = janus_get_monotonic_time();
+
 						//TODO ThanhTN
-						int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
-						JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
+						printf("THANHTN: commented %s, %d, %s, msg->transaction = %s\n", __FUNCTION__, __LINE__, __FILE__, g_strdup((char *)msg->transaction));
+						
+						if ((handleOfferSdp->msg != NULL) && (msg != NULL))
+						{
+							printf( "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+							memcpy (handleOfferSdp->msg, msg, sizeof(handleOfferSdp->msg));
+						}
+
+						handleOfferSdp->event = json_deep_copy (event);
+						
+						handleOfferSdp->jsep = json_deep_copy(jsep);
+					
+						//wait to copy to handleOfferSdp
+						isSubOfVideoroom = TRUE;
+
+					//	int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
+					//	JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
+						
 						/* Also notify event handlers */
 						if(notify_events && gateway->events_is_enabled()) {
 							json_t *info = json_object();
@@ -6750,7 +6848,7 @@ static void *janus_videoroom_handler(void *data) {
 						char temp_error[512];
 						JANUS_LOG(LOG_VERB, "Munging SDP offer (update) to adapt it to the subscriber's requirements\n");
 						janus_sdp *offer = janus_sdp_parse(publisher->sdp, temp_error, sizeof(temp_error));
-						JANUS_LOG(LOG_VERB, "THANHTN: printf offer sdp of the request configure: %s\n", offer);
+						printf( "THANHTN: printf offer sdp of the request configure: %s\n", offer);
 						if(publisher->audio && !subscriber->audio_offered)
 							janus_sdp_mline_remove(offer, JANUS_SDP_AUDIO);
 						if(publisher->video && !subscriber->video_offered)
@@ -7053,7 +7151,7 @@ static void *janus_videoroom_handler(void *data) {
 				session->sdp_version = 1;	// This needs to be increased when it changes
 				session->sdp_sessid = janus_get_real_time();
 			}
-			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+			
 			const char *type = NULL;
 			if(!strcasecmp(msg_sdp_type, "offer")) {
 				/* We need to answer */
@@ -7080,7 +7178,6 @@ static void *janus_videoroom_handler(void *data) {
 				g_snprintf(error_cause, 512, "Only publishers send offers");
 				goto error;
 			} else {
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				/* This is a new publisher: is there room? */
 				participant = janus_videoroom_session_get_publisher(session);
 				janus_videoroom *videoroom = participant->room;
@@ -7121,7 +7218,7 @@ static void *janus_videoroom_handler(void *data) {
 					g_snprintf(error_cause, 512, "Room requires end-to-end encrypted media");
 					goto error;
 				}
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+				
 				/* Now prepare the SDP to give back */
 				if(strstr(msg_sdp, "mozilla") || strstr(msg_sdp, "Mozilla")) {
 					participant->firefox = TRUE;
@@ -7136,7 +7233,7 @@ static void *janus_videoroom_handler(void *data) {
 					g_snprintf(error_cause, 512, "Error parsing offer: %s", error_str);
 					goto error;
 				}
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+				
 				char *audio_fmtp = NULL;
 				GList *temp = offer->m_lines;
 				while(temp) {
@@ -7155,7 +7252,7 @@ static void *janus_videoroom_handler(void *data) {
 						/* Are the extmaps we care about there? */
 						GList *ma = m->attributes;
 						while(ma) {
-							JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+							printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 							janus_sdp_attribute *a = (janus_sdp_attribute *)ma->data;
 							if(a->name && a->value) {
 								if(videoroom->audiolevel_ext && m->type == JANUS_SDP_AUDIO && strstr(a->value, JANUS_RTP_EXTMAP_AUDIO_LEVEL)) {
@@ -7199,12 +7296,14 @@ static void *janus_videoroom_handler(void *data) {
 						}
 					}
 				}
+				
 				JANUS_LOG(LOG_VERB, "The publisher is going to use the %s audio codec\n", janus_audiocodec_name(participant->acodec));
 				participant->audio_pt = janus_audiocodec_pt(participant->acodec);
 				if(participant->acodec != JANUS_AUDIOCODEC_MULTIOPUS) {
 					g_free(audio_fmtp);
 					audio_fmtp = NULL;
 				}
+				
 				char *vp9_profile = videoroom->vp9_profile;
 				char *h264_profile = videoroom->h264_profile;
 				if(participant->vcodec == JANUS_VIDEOCODEC_NONE) {
@@ -7240,6 +7339,7 @@ static void *janus_videoroom_handler(void *data) {
 						}
 					}
 				}
+				
 				JANUS_LOG(LOG_VERB, "The publisher is going to use the %s video codec\n", janus_videocodec_name(participant->vcodec));
 				participant->video_pt = janus_videocodec_pt(participant->vcodec);
 				janus_sdp *answer = janus_sdp_generate_answer(offer,
@@ -7289,6 +7389,7 @@ static void *janus_videoroom_handler(void *data) {
 				JANUS_LOG(LOG_VERB, "Per the answer, the publisher %s going to open a data channel\n",
 					participant->data ? "is" : "is NOT");
 				/* Update the event with info on the codecs that we'll be handling */
+				
 				if(event) {
 					if(participant->audio)
 						json_object_set_new(event, "audio_codec", json_string(janus_audiocodec_name(participant->acodec)));
@@ -7308,6 +7409,7 @@ static void *janus_videoroom_handler(void *data) {
 						m->b_value = videoroom->bitrate/1000;
 					}
 				}
+				
 				/* Find out which fmtp was used for video */
 				g_free(participant->vfmtp);
 				participant->vfmtp = NULL;
@@ -7340,6 +7442,7 @@ static void *janus_videoroom_handler(void *data) {
 						break;
 					twcc_ext_id++;
 				}
+				
 				offer = janus_sdp_generate_offer(s_name, answer->c_addr,
 					JANUS_SDP_OA_AUDIO, participant->audio,
 					JANUS_SDP_OA_AUDIO_CODEC, janus_audiocodec_name(participant->acodec),
@@ -7395,7 +7498,7 @@ static void *janus_videoroom_handler(void *data) {
 				janus_sdp_destroy(answer);
 				/* Send the answer back to the publisher */
 				JANUS_LOG(LOG_VERB, "Handling publisher: turned this into an answer '%s':\n%s\n", type, answer_sdp);
-			
+
 				json_t *jsep = json_pack("{ssss}", "type", type, "sdp", answer_sdp);
 				g_free(answer_sdp);
 				if(e2ee)
@@ -7408,13 +7511,48 @@ static void *janus_videoroom_handler(void *data) {
 				g_atomic_int_set(&session->hangingup, 0);
 				gint64 start = janus_get_monotonic_time();
 
-				while ((roomInfo = roomInfo->next) != NULL)
+		/*		while (roomInfo != NULL)
 				{
 					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->room_id = %d\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->room_id);
+					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->session_id[0] = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->session_id[0]);
+					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->room_name_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->room_name_of_brower1);
+					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->user_id_str_of_brower2 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->user_id_str_of_brower2);
+					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
+					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->sdp_offer_request_configure = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->sdp_offer_request_configure);
+					roomInfo = roomInfo->next;
+				}
+		*/
+				printf( "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+				printf("THANHTN: %s, %d, %s, msg->transaction = %s\n", __FUNCTION__, __LINE__, __FILE__, g_strdup((char *)msg->transaction));
+				int res = 0;
+				GThread *handleSdp_thread = NULL;
+				GError *error = NULL;
+
+				janus_mutex_init(&handleStartSdp->vsm_mutex);
+			
+				if (!enableSdpStart)
+				{
+					if ((handleStartSdp->msg != NULL) && (msg != NULL))
+					{
+						printf( "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+						memcpy (handleStartSdp->msg, msg, sizeof(handleStartSdp->msg));
+					}
+					handleStartSdp->event = json_deep_copy(event);
+					handleStartSdp->jsep = json_deep_copy (jsep);
+
+					if (handleStartSdp->jsep == NULL)
+						printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				}
 
-				JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-				int res = 0;
+				handleSdp_thread = g_thread_try_new("Handle SDP Offer", vsm_handle_spd_response_for_client, NULL, &error);
+
+				if(error != NULL) {
+					// We show the error but it's not fatal 
+					JANUS_LOG(LOG_ERR, "Got error %d (%s) trying to launch the handle Sdp response thread for Client\n",
+						error->code, error->message ? error->message : "??");
+					g_error_free(error);
+				}
+
 			//	int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
 			//	JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (took %"SCNu64" us)\n", res, janus_get_monotonic_time()-start);
 
@@ -7476,9 +7614,11 @@ error:
 			JANUS_LOG(LOG_VERB, "  >> Pushing event: %d (%s)\n", ret, janus_get_api_error(ret));
 			json_decref(event);
 			janus_videoroom_message_free(msg);
+			janus_mutex_destroy(&handleOfferSdp->vsm_mutex);
 		}
 	}
 	JANUS_LOG(LOG_VERB, "Leaving VideoRoom handler thread\n");
+	janus_mutex_destroy(&handleOfferSdp->vsm_mutex);
 	return NULL;
 }
 
@@ -7816,11 +7956,101 @@ static void janus_videoroom_rtp_forwarder_rtcp_receive(janus_videoroom_rtp_forwa
 }
 
 static void *janus_videoroom_rtp_forwarder_rtcp_thread(void *data) {
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	JANUS_LOG(LOG_VERB, "Joining RTCP thread for RTP forwarders...\n");
 	/* Run the main loop */
 	g_main_loop_run(rtcpfwd_loop);
 	/* When the loop ends, we're done */
 	JANUS_LOG(LOG_VERB, "Leaving RTCP thread for RTP forwarders...\n");
 	return NULL;
+}
+
+static void *vsm_handle_spd_response_for_client ()
+{
+	while (1)
+	{
+		
+		printf("THANHTN: %s, %d, %s, roomInfo->isSubscriberOfBrower2 = %d, roomInfo->isCompletedCandidateOfBrower1 = %d\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->isSubscriberOfBrower2, roomInfo->isCompletedCandidateOfBrower1);
+		if ((roomInfo->isSubscriberOfBrower2) && (roomInfo->isCompletedCandidateOfBrower1) && (isSubOfVideoroom == TRUE))
+		{
+			janus_mutex_lock(&handleOfferSdp->vsm_mutex);
+			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower2 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower2);
+
+			typeOfMessage = 1;
+			printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if (handleOfferSdp->msg->handle == NULL)
+				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if (handleOfferSdp->jsep == NULL)
+				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if (roomInfo->transaction_text_of_brower2 == NULL)
+				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+			if (handleOfferSdp->event == NULL)
+				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+			
+			
+			if ((handleOfferSdp->msg->handle != NULL) && (roomInfo->transaction_text_of_brower2 != NULL) && (handleOfferSdp->jsep != NULL) && (handleOfferSdp->event != NULL))
+			{
+				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		//		gateway->push_event(handleOfferSdp->msg->handle, NULL, roomInfo->transaction_text_of_brower2, handleOfferSdp->event, handleOfferSdp->jsep);
+				gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower2, handleOfferSdp->event, handleOfferSdp->jsep);
+			}
+
+			janus_mutex_unlock(&handleOfferSdp->vsm_mutex);
+			janus_videoroom_message_free (handleOfferSdp->msg);	
+			json_decref(handleOfferSdp->event);
+			json_decref(handleOfferSdp->jsep);
+
+			janus_mutex_lock(&handleStartSdp->vsm_mutex);
+
+			while (1)
+			{
+				if (enableSdpStart)
+				{
+					printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
+					typeOfMessage = 2;	
+
+					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->session_id[0] = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->session_id[0]);
+
+					if (handleStartSdp->jsep == NULL)
+						printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+					gateway->push_event(handleStartSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower1, handleStartSdp->event, handleStartSdp->jsep);
+					enableSdpStart = FALSE;	
+
+					janus_videoroom_message_free (handleStartSdp->msg);	
+					json_decref(handleStartSdp->event);
+					json_decref(handleStartSdp->jsep);
+
+					janus_mutex_unlock(&handleStartSdp->vsm_mutex);
+					break;
+				}
+			}
+
+			roomInfo->isSubscriberOfBrower2 = FALSE;
+			roomInfo->isCompletedCandidateOfBrower1 = FALSE;
+			isSubOfVideoroom = FALSE;
+		}
+		else if ((roomInfo->isSubscriberOfBrower1) && (roomInfo->isCompletedCandidateOfBrower2) && (isSubOfVideoroom == TRUE))
+		{
+			printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+			typeOfMessage = 3;
+			gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, handleOfferSdp->msg->transaction, handleOfferSdp->event, handleOfferSdp->jsep);
+
+			sleep (3);
+
+			typeOfMessage = 4;
+			gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower2, handleOfferSdp->event, handleOfferSdp->jsep);
+
+			roomInfo->isSubscriberOfBrower1 = FALSE;
+			roomInfo->isCompletedCandidateOfBrower2 = FALSE;
+			isSubOfVideoroom = FALSE;
+			janus_videoroom_message_free (handleOfferSdp->msg);	
+			json_decref(handleOfferSdp->event);
+			json_decref(handleOfferSdp->jsep);
+		}
+		sleep (1);
+		
+	}
 }

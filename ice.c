@@ -613,6 +613,12 @@ void janus_ice_relay_rtcp_internal(janus_ice_handle *handle, janus_plugin_rtcp *
 static GHashTable *plugin_sessions;
 static janus_mutex plugin_sessions_mutex;
 gboolean janus_plugin_session_is_alive(janus_plugin_session *plugin_session) {
+	if (plugin_session == NULL)
+		printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	if (plugin_session < (janus_plugin_session *)0x1000)
+		printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	if (g_atomic_int_get(&plugin_session->stopped))
+		printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(plugin_session == NULL || plugin_session < (janus_plugin_session *)0x1000 ||
 			g_atomic_int_get(&plugin_session->stopped))
 		return FALSE;
@@ -787,17 +793,18 @@ char *janus_sdp_merge_edit_recv(janus_sdp *anon, char *candidate) {
 	}
 
 	char *sdp = janus_sdp_write(anon);
-
+/*
 	JANUS_LOG(LOG_VERB, " -------------------------------------------\n");
 	JANUS_LOG(LOG_VERB, "  >> THANTHN1: Merged (%zu bytes)\n", strlen(sdp));
 	JANUS_LOG(LOG_VERB, " -------------------------------------------\n");
 	JANUS_LOG(LOG_VERB, "%s\n", sdp);
-
+*/
 	return sdp;
 }
 
 gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const char **error) {
 	const char *ignore_error = NULL;
+	janus_session *session = handle->session;
 	if(error == NULL) {
 		error = &ignore_error;
 	}
@@ -810,7 +817,10 @@ gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const 
 		JANUS_LOG(LOG_VERB, "No more remote candidates for handle %"SCNu64"!\n", handle->handle_id);
 		janus_flags_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_ALL_TRICKLES);
 		CandidateIsCompleted = TRUE;
-		janus_sdp_merge_edit_recv (parsed_sdp_tmp, "completed");
+		if (session->session_id = session_id_of_brower1)
+			janus_sdp_merge_edit_recv (sdp_configure_brower1, "completed");
+		else if (session->session_id = session_id_of_brower2)
+			janus_sdp_merge_edit_recv (sdp_configure_brower2, "completed");
 	} else {
 		/* Handle remote candidate */
 		json_t *mid = json_object_get(candidate, "sdpMid");
@@ -838,7 +848,10 @@ gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const 
 		}
 		JANUS_LOG(LOG_VERB, "[%"SCNu64"] Trickle candidate (%s): %s\n", handle->handle_id, json_string_value(mid), json_string_value(rc));
 		
-		janus_sdp_merge_edit_recv (parsed_sdp_tmp, json_string_value(rc));
+		if (session->session_id = session_id_of_brower1)
+			janus_sdp_merge_edit_recv (sdp_configure_brower1, json_string_value(rc));
+		else
+			janus_sdp_merge_edit_recv (sdp_configure_brower2, json_string_value(rc));
 
 		/* Parse it */
 		int sdpMLineIndex = mline ? json_integer_value(mline) : -1;

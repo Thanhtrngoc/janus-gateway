@@ -116,10 +116,20 @@ janus_sdp *janus_sdp_preparse(void *ice_handle, const char *jsep_sdp, char *erro
 
 /* Parse SDP */
 int janus_sdp_process(void *ice_handle, janus_sdp *remote_sdp, gboolean rids_hml, gboolean update) {
+	if (!ice_handle)
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	
+	if (!remote_sdp)
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
 	if(!ice_handle || !remote_sdp)
 		return -1;
 	janus_ice_handle *handle = (janus_ice_handle *)ice_handle;
 	janus_ice_stream *stream = handle->stream;
+
+	if (!stream)
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
 	if(!stream)
 		return -1;
 	gchar *ruser = NULL, *rpass = NULL, *rhashing = NULL, *rfingerprint = NULL;
@@ -129,10 +139,12 @@ int janus_sdp_process(void *ice_handle, janus_sdp *remote_sdp, gboolean rids_hml
 #endif
 	gboolean rtx = FALSE;
 	/* Ok, let's start with global attributes */
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	GList *temp = remote_sdp->attributes;
 	while(temp) {
 		janus_sdp_attribute *a = (janus_sdp_attribute *)temp->data;
 		if(a && a->name && a->value) {
+			printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 			if(!strcasecmp(a->name, "fingerprint")) {
 				JANUS_LOG(LOG_VERB, "[%"SCNu64"] Fingerprint (global) : %s\n", handle->handle_id, a->value);
 				if(strcasestr(a->value, "sha-256 ") == a->value) {
@@ -156,6 +168,7 @@ int janus_sdp_process(void *ice_handle, janus_sdp *remote_sdp, gboolean rids_hml
 		}
 		temp = temp->next;
 	}
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* Now go on with m-line and their attributes */
 	int mlines = 0;
 	temp = remote_sdp->m_lines;
@@ -213,6 +226,7 @@ int janus_sdp_process(void *ice_handle, janus_sdp *remote_sdp, gboolean rids_hml
 				JANUS_LOG(LOG_VERB, "[%"SCNu64"] Audio rejected by peer...\n", handle->handle_id);
 			}
 		} else if(m->type == JANUS_SDP_VIDEO) {
+			printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 			if(handle->rtp_profile == NULL && m->proto != NULL)
 				handle->rtp_profile = g_strdup(m->proto);
 			video++;
@@ -302,6 +316,7 @@ int janus_sdp_process(void *ice_handle, janus_sdp *remote_sdp, gboolean rids_hml
 			temp = temp->next;
 			continue;
 		}
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		/* Look for mid, ICE credentials and fingerprint first: check media attributes */
 		GList *tempA = m->attributes;
 		while(tempA) {

@@ -73,9 +73,16 @@ static GHashTable *plugins_so = NULL;
 /* Daemonization */
 static gboolean daemonize = FALSE;
 static int pipefd[2];
-janus_sdp *parsed_sdp_tmp = NULL;
+janus_sdp *sdp_configure_brower1 = NULL;
+janus_sdp *sdp_configure_brower2 = NULL;
+janus_sdp *sdp_start_brower1 = NULL;
+janus_sdp *sdp_start_brower2 = NULL;
 gboolean CandidateIsCompleted  = FALSE;
 room_info *roomInfo = NULL;
+uint64_t session_id_of_brower1 = 0;
+uint64_t session_id_of_brower2 = 0;
+int typeOfMessage = 0;
+gboolean enableSdpStart = FALSE;
 
 #ifdef REFCOUNT_DEBUG
 /* Reference counters debugging */
@@ -594,6 +601,7 @@ void janus_plugin_end_session(janus_plugin_session *plugin_session);
 void janus_plugin_notify_event(janus_plugin *plugin, janus_plugin_session *plugin_session, json_t *event);
 gboolean janus_plugin_auth_is_signature_valid(janus_plugin *plugin, const char *token);
 gboolean janus_plugin_auth_signature_contains(janus_plugin *plugin, const char *token, const char *desc);
+json_t *vsm_janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *sdp_type, const char *sdp, gboolean restart, json_t *jsep);
 static janus_callbacks janus_handler_plugin =
 	{
 		.push_event = janus_plugin_push_event,
@@ -736,7 +744,7 @@ janus_session *janus_session_create(guint64 session_id) {
 		}
 	}
 	session = (janus_session *)g_malloc(sizeof(janus_session));
-	JANUS_LOG(LOG_INFO, "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
+	printf( "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_INFO, "Creating new session: %"SCNu64"; %p\n", session_id, session);
 	session->session_id = session_id;
 	janus_refcount_init(&session->ref, janus_session_free);
@@ -1324,89 +1332,24 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		json_t *body = json_object_get(root, "body");
-		json_t *request_tmp = json_object_get(body, "request");
-		gboolean isSdp = FALSE;
+		json_t *request_tmp = NULL; 
+		request_tmp = json_object_get(body, "request");
+		char *request_tmp_str = NULL;
+
 		if (request_tmp != NULL)
 		{
-			char *request_tmp_str = NULL;
 			request_tmp_str = g_strdup(json_string_value(request_tmp));
-			if (!strncmp (request_tmp_str, "join", sizeof (request_tmp_str)))
-				isSdp = FALSE;
-			else
-			{
-				isSdp = TRUE;	
-			}
-		
-			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, request_tmp_str = %s, isSdp = %d\n", __FUNCTION__, __LINE__, request_tmp_str, isSdp);
+			printf( "THANHTN: %s, %d, request_tmp_str = %s\n", __FUNCTION__, __LINE__, request_tmp_str);
 		}
 
-		json_t *jroom_id = json_object_get(body, "room");
-		
-		guint64 room_id_tmp = 0;
-	
-		if (jroom_id != NULL)
-		{
-			room_id_tmp = json_integer_value(jroom_id);
-			
-			roomInfo = findRoom(roomInfo, room_id_tmp);
-
-			if (roomInfo == NULL)
-			{
-				roomInfo = newRoom ();
-				roomInfo->room_id = room_id_tmp;
-				roomInfo->session_id[0] = session_id;
-				memcpy (roomInfo->transaction_text_of_brower1, transaction_text, sizeof(roomInfo->transaction_text_of_brower1));
-			}
-			else
-			{
-				roomInfo->session_id[1] = session_id;
-				memcpy (roomInfo->transaction_text_of_brower2, transaction_text, sizeof(roomInfo->transaction_text_of_brower2));
-			}
-			
-		}
-
-		json_t *ptype_tmp = json_object_get(body, "ptype");
-	
-		if (ptype_tmp != NULL)
-		{
-			char *ptype_tmp_str = NULL;
-			ptype_tmp_str = g_strdup(json_string_value(ptype_tmp));
-			if (!strncmp (ptype_tmp_str, "subscriber", sizeof (ptype_tmp_str)))
-			{
-					guint64 feed_id = 0;
-					char feed_id_num[30];
-					json_t *feed = json_object_get(root, "feed");
-					feed_id = json_integer_value(feed);
-					g_snprintf(feed_id_num, sizeof(feed_id_num), "%"SCNu64, feed_id);
-					// because brower2 will send feed when It want to subscriber 
-					if (roomInfo->user_id_str_of_brower2[0] == 0)
-						memcpy (roomInfo->user_id_str_of_brower2, feed_id_num, sizeof(roomInfo->user_id_str_of_brower2));
-					else
-						memcpy (roomInfo->user_id_str_of_brower1, feed_id_num, sizeof(roomInfo->user_id_str_of_brower1));
-					
-					roomInfo->isSubscriber = TRUE;
-
-			}
-			else if (!strncmp (ptype_tmp_str, "publisher", sizeof (ptype_tmp_str)))
-			{
-				json_t *display = json_object_get(root, "display");
-				char *display_text = display ? json_string_value(display) : NULL;
-
-				if (roomInfo->user_id_str_of_brower1[0] == 0)
-					memcpy (roomInfo->room_name_of_brower1, display_text, sizeof(roomInfo->room_name_of_brower1));
-				else
-					memcpy (roomInfo->room_name_of_brower2, display_text, sizeof(roomInfo->room_name_of_brower2));
-
-				roomInfo->isSubscriber = FALSE;
-
-			}
-			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
-		}
 
 		/* Is there an SDP attached? */
 		json_t *jsep = json_object_get(root, "jsep");
 		char *jsep_type = NULL;
 		char *jsep_sdp = NULL, *jsep_sdp_stripped = NULL;
+		char error_str[512];
+		error_str[0] = '\0';
+		int audio = 0, video = 0, data = 0;
 		gboolean renegotiation = FALSE;
 		if(jsep != NULL) {
 			if(!json_is_object(jsep)) {
@@ -1488,29 +1431,25 @@ int janus_process_incoming_request(janus_request *request) {
 			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Remote SDP:\n%s", handle->handle_id, jsep_sdp);
 			janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");	
 
-			json_t *request_tmp1 = json_object_get(body, "request");
-			if (request_tmp1 != NULL)
+			if (request_tmp == NULL)
 			{
-				char *request_tmp_str1 = NULL;
-				request_tmp_str1 = g_strdup(json_string_value(request_tmp1));
-				if ((!strncmp (request_tmp_str1, "start", sizeof (request_tmp_str1))) ||
-					(!strncmp (request_tmp_str1, "configure", sizeof (request_tmp_str1))))
-					isSdp = TRUE;
-				else
-				{
-						isSdp = FALSE;
-				}
-				
-				JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, request_tmp_str1 = %s\n", __FUNCTION__, __LINE__, request_tmp_str1);
-			}
+				request_tmp = json_object_get(body, "request");
+
+				if (request_tmp != NULL)
+					request_tmp_str = g_strdup(json_string_value(request_tmp));
+
+				printf("THANHTN: %s, %d, request_tmp_str = %s\n", __FUNCTION__, __LINE__, request_tmp_str);
+			}			
+		
 
 			/* Is this valid SDP? */
-			char error_str[512];
+		/*	char error_str[512];
 			error_str[0] = '\0';
 			int audio = 0, video = 0, data = 0;
+		*/
 			janus_sdp *parsed_sdp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
-			parsed_sdp_tmp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
-			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		//	janus_sdp *parsed_sdp_tmp1 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+		//	printf( "THANHTN: %s, %d, %s, parsed_sdp_tmp1 = %s\n", __FUNCTION__, __LINE__, __FILE__, janus_sdp_write(parsed_sdp_tmp1));
 
 			if(parsed_sdp == NULL) {
 				/* Invalid SDP */
@@ -1563,15 +1502,18 @@ int janus_process_incoming_request(janus_request *request) {
 					/* Make sure we're waiting for an ANSWER in the first place */
 					if(!handle->agent) {
 						JANUS_LOG(LOG_ERR, "Unexpected ANSWER (did we offer?)\n");
+						JANUS_LOG(LOG_ERR, "THANHTN: enable skipping.....to continues\n");
+					/*
 						janus_sdp_destroy(parsed_sdp);
 						g_free(jsep_type);
 						janus_flags_clear(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER);
 						ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_UNEXPECTED_ANSWER, "Unexpected ANSWER (did we offer?)");
 						janus_mutex_unlock(&handle->mutex);
 						goto jsondone;
+					*/
 					}
 				}
-				if(janus_sdp_process(handle, parsed_sdp, rids_hml, FALSE) < 0) {
+			/*	if(janus_sdp_process(handle, parsed_sdp, rids_hml, FALSE) < 0) {
 					JANUS_LOG(LOG_ERR, "Error processing SDP\n");
 					janus_sdp_destroy(parsed_sdp);
 					g_free(jsep_type);
@@ -1579,7 +1521,7 @@ int janus_process_incoming_request(janus_request *request) {
 					ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_JSEP_INVALID_SDP, "Error processing SDP");
 					janus_mutex_unlock(&handle->mutex);
 					goto jsondone;
-				}
+				}*/
 				if(!offer) {
 					/* Set remote candidates now (we received an answer) */
 					if(do_trickle) {
@@ -1669,6 +1611,7 @@ int janus_process_incoming_request(janus_request *request) {
 					handle->stream->transport_wide_cc_ext_id = transport_wide_cc_ext_id;
 				}
 			}
+			printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 			char *tmp = handle->remote_sdp;
 			handle->remote_sdp = g_strdup(jsep_sdp);
 			g_free(tmp);
@@ -1702,8 +1645,114 @@ int janus_process_incoming_request(janus_request *request) {
 		/* Send the message to the plugin (which must eventually free transaction_text and unref the two objects, body and jsep) */
 		json_incref(body);
 		json_t *body_jsep = NULL;
+		char *ptype_tmp_str = NULL;
+		guint64 feed_id = 0;
+		char feed_id_num[30];
 
-		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+		if (request_tmp_str != NULL)
+		{
+
+			if (!strncmp (request_tmp_str, "join", sizeof (request_tmp_str)))
+			{
+				json_t *jroom_id = json_object_get(body, "room");
+				guint64 room_id_tmp = 0;
+
+				if (jroom_id != NULL)
+				{
+					room_id_tmp = json_integer_value(jroom_id);
+					roomInfo = findRoom(roomInfo, room_id_tmp);
+					if (roomInfo == NULL)
+					{
+						roomInfo = newRoom ();
+						roomInfo->room_id = room_id_tmp;
+						if (roomInfo->session_id[0] != session_id)
+						{	
+							roomInfo->session_id[0] = session_id;
+							session_id_of_brower1 = session_id;
+						}		
+					}
+					else
+					{
+						if (roomInfo->session_id[1] != session_id)
+						{
+							roomInfo->session_id[1] = session_id;
+							session_id_of_brower2 = session_id;
+						}
+					}
+					json_t *ptype_tmp = json_object_get(body, "ptype");
+
+					if (ptype_tmp != NULL)
+					{
+						ptype_tmp_str = g_strdup(json_string_value(ptype_tmp));
+						if (!strncmp (ptype_tmp_str, "subscriber", sizeof (ptype_tmp_str)))
+						{
+							json_t *feed = json_object_get(body, "feed");
+							feed_id = json_integer_value(feed);
+							g_snprintf(feed_id_num, sizeof(feed_id_num), "%"SCNu64, feed_id);
+							printf( "THANHTN: %s, %d, %s, feed_id_num = %s\n", __FUNCTION__, __LINE__, __FILE__, feed_id_num);
+							// because brower will only send feed when It want to subscriber 
+							if (roomInfo->session_id[1] == session_id)
+							{
+								roomInfo->isSubscriberOfBrower2 = TRUE;
+								roomInfo->user_id_str_of_brower1 = feed_id_num;
+								printf( "THANHTN: %s, %d, %s, roomInfo->transaction_text_of_brower2 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower2);
+								memcpy (roomInfo->transaction_text_of_brower2, g_strdup((char *)transaction_text), BUF_128);
+							}
+							else
+							{
+								roomInfo->isSubscriberOfBrower1 = TRUE;
+								memcpy (roomInfo->user_id_str_of_brower2, feed_id_num, sizeof(roomInfo->user_id_str_of_brower2));
+								memcpy (roomInfo->transaction_text_of_brower1, g_strdup((char *)transaction_text), BUF_128);
+							}
+						}
+						else if (!strncmp (ptype_tmp_str, "publisher", sizeof (ptype_tmp_str)))
+						{
+							json_t *display = json_object_get(body, "display");
+							char *display_text = display ? json_string_value(display) : NULL;
+							printf( "THANHTN: %s, %d, %s, display_text = %s\n", __FUNCTION__, __LINE__, __FILE__, display_text);
+							if (roomInfo->session_id[0] == session_id)
+								memcpy (roomInfo->room_name_of_brower1, display_text, BUF_128);
+							else
+								memcpy (roomInfo->room_name_of_brower2, display_text, BUF_128);
+
+							roomInfo->isSubscriberOfBrower1 = FALSE;
+							roomInfo->isSubscriberOfBrower2 = FALSE;
+
+						}
+					}
+				}
+
+			}
+			else if ((!strncmp (request_tmp_str, "configure", sizeof (request_tmp_str))) &&
+					(roomInfo != NULL) && (roomInfo->room_id > 0))
+			{
+				if (roomInfo->transaction_text_of_brower1[0] == 0)
+					memcpy (roomInfo->transaction_text_of_brower1, g_strdup((char *)transaction_text), BUF_128);
+				else
+					memcpy (roomInfo->transaction_text_of_brower2, g_strdup((char *)transaction_text), BUF_128);
+				
+				if (roomInfo->session_id[0] == session_id)
+					sdp_configure_brower1 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+				else
+					sdp_configure_brower2 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+				
+				printf("THANHTN: %s, %d, %s, sdp = %s\n", __FUNCTION__, __LINE__, __FILE__,  janus_sdp_write (sdp_configure_brower1));
+
+			}
+			else if ((!strncmp (request_tmp_str, "start", sizeof (request_tmp_str))) &&
+					(roomInfo != NULL) && (roomInfo->room_id > 0))
+			{
+				if (roomInfo->session_id[0] == session_id)
+					sdp_start_brower1 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+				else
+					sdp_start_brower2 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+
+				enableSdpStart = TRUE;
+			}
+		}
+
 		if(jsep_sdp_stripped) {
 			body_jsep = json_pack("{ssss}", "type", jsep_type, "sdp", jsep_sdp_stripped);
 			/* Check if simulcasting is enabled */
@@ -1810,7 +1859,7 @@ int janus_process_incoming_request(janus_request *request) {
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_JSON, "Can't have both candidate and candidates");
 			goto jsondone;
 		}
-		JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, candidate = %s, candidates = %s\n", __FUNCTION__, __LINE__, candidate, candidates);
+		printf( "THANHTN: %s, %d, candidate = %s, candidates = %s\n", __FUNCTION__, __LINE__, candidate, candidates);
 		if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_CLEANING)) {
 			JANUS_LOG(LOG_ERR, "[%"SCNu64"] Received a trickle, but still cleaning a previous session\n", handle->handle_id);
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_WEBRTC_STATE, "Still cleaning a previous session");
@@ -1862,7 +1911,15 @@ int janus_process_incoming_request(janus_request *request) {
 				janus_mutex_unlock(&handle->mutex);
 				goto jsondone;
 			}
-			JANUS_LOG(LOG_INFO, "THANHTN: %s, %d, before excute janus_ice_trickle_parse,CandidateIsCompleted = %d\n", __FUNCTION__, __LINE__, CandidateIsCompleted);
+
+			if (roomInfo != NULL)
+			{
+				if (roomInfo->session_id[0] == session_id)
+					roomInfo->isCompletedCandidateOfBrower1 = CandidateIsCompleted;
+				else if (roomInfo->session_id[0] == session_id)
+					roomInfo->isCompletedCandidateOfBrower2 = CandidateIsCompleted;
+			}
+			printf("THANHTN: %s, %d, before excute janus_ice_trickle_parse,CandidateIsCompleted = %d, roomInfo->isCompletedCandidateOfBrower1 = %d, roomInfo->isCompletedCandidateOfBrower2 = %d\n", __FUNCTION__, __LINE__, CandidateIsCompleted, roomInfo->isCompletedCandidateOfBrower1, roomInfo->isCompletedCandidateOfBrower2);
 		} else {
 			/* We got multiple candidates in an array */
 			if(!json_is_array(candidates)) {
@@ -3011,8 +3068,6 @@ int janus_process_success(janus_request *request, json_t *payload)
 	if(!request || !payload)
 		return -1;
 	/* Pass to the right transport plugin */
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
-	JANUS_LOG(LOG_INFO, "Hungnq: request id : %s. payload : %s \n ",request->request_id, json_string_value(payload));
 	JANUS_LOG(LOG_INFO, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
 	return request->transport->send_message(request->instance, request->request_id, request->admin, payload);
 }
@@ -3517,16 +3572,25 @@ janus_plugin *janus_plugin_find(const gchar *package) {
 
 /* Plugin callback interface */
 int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *transaction, json_t *message, json_t *jsep) {
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(!plugin || !message)
+	{
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		return -1;
+	}
 	if(!janus_plugin_session_is_alive(plugin_session))
+	{
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		return -2;
+	}
 	janus_refcount_increase(&plugin_session->ref);
 	janus_ice_handle *ice_handle = (janus_ice_handle *)plugin_session->gateway_handle;
 	if(!ice_handle || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_STOP)) {
 		janus_refcount_decrease(&plugin_session->ref);
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 		return JANUS_ERROR_SESSION_NOT_FOUND;
 	}
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	janus_refcount_increase(&ice_handle->ref);
 	janus_session *session = ice_handle->session;
 	if(!session || g_atomic_int_get(&session->destroyed)) {
@@ -3534,6 +3598,7 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 		janus_refcount_decrease(&ice_handle->ref);
 		return JANUS_ERROR_SESSION_NOT_FOUND;
 	}
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* Make sure this is a JSON object */
 	if(!json_is_object(message)) {
 		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Cannot push event (JSON error: not an object)\n", ice_handle->handle_id);
@@ -3541,14 +3606,23 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 		janus_refcount_decrease(&ice_handle->ref);
 		return JANUS_ERROR_INVALID_JSON_OBJECT;
 	}
+	if (jsep == NULL)
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	/* Attach JSEP if possible? */
 	const char *sdp_type = json_string_value(json_object_get(jsep, "type"));
 	const char *sdp = json_string_value(json_object_get(jsep, "sdp"));
 	gboolean restart = json_object_get(jsep, "sdp") ? json_is_true(json_object_get(jsep, "restart")) : FALSE;
 	gboolean e2ee = json_object_get(jsep, "sdp") ? json_is_true(json_object_get(jsep, "e2ee")) : FALSE;
 	json_t *merged_jsep = NULL;
+	if (sdp == NULL)
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	if (sdp_type == NULL)
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(sdp_type != NULL && sdp != NULL) {
-		merged_jsep = janus_plugin_handle_sdp(plugin_session, plugin, sdp_type, sdp, restart);
+		printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+//		merged_jsep = janus_plugin_handle_sdp(plugin_session, plugin, sdp_type, sdp, restart);
+		merged_jsep = vsm_janus_plugin_handle_sdp(plugin_session, plugin, sdp_type, sdp, restart, jsep);
+
 		if(merged_jsep == NULL) {
 			if(ice_handle == NULL || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_STOP)
 					|| janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_ALERT)) {
@@ -3564,6 +3638,7 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 			}
 		}
 	}
+	printf("THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	/* Reference the payload, as the plugin may still need it and will do a decref itself */
 	json_incref(message);
 	/* Prepare JSON event */
@@ -3591,7 +3666,7 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 		}
 	}
 	/* Send the event */
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+	printf("THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
 	JANUS_LOG(LOG_VERB, "[%"SCNu64"] Sending event to transport...\n", ice_handle->handle_id);
 	janus_session_notify_event(session, event);
 
@@ -3606,7 +3681,83 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 	return JANUS_OK;
 }
 
+// Edit by THANHTN
+json_t *vsm_janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *sdp_type, const char *sdp, gboolean restart, json_t *jsep) {
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	if(!janus_plugin_session_is_alive(plugin_session) ||
+			plugin == NULL || sdp_type == NULL || sdp == NULL) {
+		JANUS_LOG(LOG_ERR, "Invalid arguments\n");
+		return NULL;
+	}
+
+	janus_ice_handle *ice_handle = (janus_ice_handle *)plugin_session->gateway_handle;
+	//~ if(ice_handle == NULL || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_READY)) {
+	if(ice_handle == NULL) {
+		JANUS_LOG(LOG_ERR, "Invalid ICE handle\n");
+		return NULL;
+	}
+	int offer = 0;
+	if(!strcasecmp(sdp_type, "offer")) {
+		/* This is an offer from a plugin */
+		offer = 1;
+		janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER);
+		janus_flags_clear(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_ANSWER);
+	} else if(!strcasecmp(sdp_type, "answer")) {
+		/* This is an answer from a plugin */
+		janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_ANSWER);
+		if(janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER))
+			janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_NEGOTIATED);
+	} else {
+		/* TODO Handle other messages */
+		JANUS_LOG(LOG_ERR, "Unknown type '%s'\n", sdp_type);
+		return NULL;
+	}
+
+	janus_mutex_lock(&ice_handle->mutex);
+
+    char *sdp_merged = NULL;
+
+	if (typeOfMessage == 1)
+    {
+        sdp_merged = janus_sdp_write(sdp_configure_brower1);
+    }
+	else if (typeOfMessage == 2)
+    {
+        sdp_merged = janus_sdp_write(sdp_start_brower1);
+    }
+	else if (typeOfMessage == 3)
+    {
+        sdp_merged = janus_sdp_write(sdp_configure_brower2);
+    }
+    else if (typeOfMessage == 4)
+    {
+        sdp_merged = janus_sdp_write(sdp_start_brower2);
+    }
+
+
+	printf("THANHTN: %s, %d, %s, typeOfMessage = %d, sdp_merged = %s\n", __FUNCTION__, __LINE__, __FILE__, typeOfMessage, sdp_merged);
+	if(sdp_merged == NULL) {
+		/* Couldn't merge SDP */
+		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error merging SDP\n", ice_handle->handle_id);
+//		janus_sdp_destroy(saved_sdp);
+		janus_mutex_unlock(&ice_handle->mutex);
+		return NULL;
+	}
+//	janus_sdp_destroy(saved_sdp);
+
+	/* Prepare JSON event */
+	json_t *jsep_event = json_object();
+	json_object_set_new(jsep_event, "type", json_string(sdp_type));
+	json_object_set_new(jsep_event, "sdp", json_string(sdp_merged));
+	char *tmp = ice_handle->local_sdp;
+	ice_handle->local_sdp = sdp_merged;
+	janus_mutex_unlock(&ice_handle->mutex);
+	g_free(tmp);
+	return jsep_event;
+}
+
 json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *sdp_type, const char *sdp, gboolean restart) {
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(!janus_plugin_session_is_alive(plugin_session) ||
 			plugin == NULL || sdp_type == NULL || sdp == NULL) {
 		JANUS_LOG(LOG_ERR, "Invalid arguments\n");
@@ -3917,9 +4068,9 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 		sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
 	}
 */
-	char *sdp_merged = janus_sdp_write(parsed_sdp_tmp);
-//	char *sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
-	JANUS_LOG(LOG_INFO, "THANHTN: %s, %d\n", __FUNCTION__, __LINE__);
+//	char *sdp_merged = janus_sdp_write(parsed_sdp_tmp);
+	char *sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
+	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 	if(sdp_merged == NULL) {
 		/* Couldn't merge SDP */
 		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error merging SDP\n", ice_handle->handle_id);
@@ -4142,7 +4293,7 @@ gboolean janus_plugin_auth_signature_contains(janus_plugin *plugin, const char *
 
 room_info *newRoom ()
 {
-	JANUS_LOG(LOG_INFO, "THANHTN: set initing room, %s, %d\n", __FUNCTION__, __LINE__);
+	printf( "THANHTN: set initing room, %s, %d\n", __FUNCTION__, __LINE__);
 
 	room_info *room = (room_info *) g_malloc (sizeof (room_info));
 
@@ -4150,17 +4301,17 @@ room_info *newRoom ()
 	room->room_id_str =  g_malloc0(BUF_128);
 	room->transaction_text_of_brower1 = g_malloc0(BUF_128);
 	room->transaction_text_of_brower2 = g_malloc0(BUF_128);
-	room->session_id = g_malloc0(2);;
+	room->session_id = g_malloc0(2);
 	room->user_id_str_of_brower1 = g_malloc0(BUF_128);
 	room->user_id_str_of_brower2 = g_malloc0(BUF_128);
 	room->sdp_answer_request_start = g_malloc0(MAX_ELEMENT);
 	room->sdp_offer_request_configure = g_malloc0(MAX_ELEMENT);
 	room->isCompletedCandidateOfBrower1 = FALSE;
 	room->isCompletedCandidateOfBrower2 = FALSE;
-	room->isSubscriber = FALSE;
+	room->isSubscriberOfBrower1 = FALSE;
+	room->isSubscriberOfBrower2 = FALSE;
 	room->room_name_of_brower1 = g_malloc0(BUF_128);
 	room->room_name_of_brower2 = g_malloc0(BUF_128);
-
 	room->next = NULL;
 
 	return room;
