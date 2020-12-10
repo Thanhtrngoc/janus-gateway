@@ -7529,6 +7529,7 @@ static void *janus_videoroom_handler(void *data) {
 				GError *error = NULL;
 
 				janus_mutex_init(&handleStartSdp->vsm_mutex);
+				janus_mutex_init(&handleOfferSdp->vsm_mutex);
 			
 				if (!enableSdpStart)
 				{
@@ -7998,17 +7999,19 @@ static void *vsm_handle_spd_response_for_client ()
 				gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower2, handleOfferSdp->event, handleOfferSdp->jsep);
 			}
 
+			sleep (3);
+		//	janus_videoroom_message_free (handleOfferSdp->msg);	
+		//	json_decref(handleOfferSdp->event);
+		//	json_decref(handleOfferSdp->jsep);
 			janus_mutex_unlock(&handleOfferSdp->vsm_mutex);
-			janus_videoroom_message_free (handleOfferSdp->msg);	
-			json_decref(handleOfferSdp->event);
-			json_decref(handleOfferSdp->jsep);
 
-			janus_mutex_lock(&handleStartSdp->vsm_mutex);
+			sleep (2);
 
 			while (1)
 			{
 				if (enableSdpStart)
 				{
+					janus_mutex_lock(&handleStartSdp->vsm_mutex);
 					printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
 					typeOfMessage = 2;	
 
@@ -8019,11 +8022,13 @@ static void *vsm_handle_spd_response_for_client ()
 					gateway->push_event(handleStartSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower1, handleStartSdp->event, handleStartSdp->jsep);
 					enableSdpStart = FALSE;	
 
-					janus_videoroom_message_free (handleStartSdp->msg);	
-					json_decref(handleStartSdp->event);
-					json_decref(handleStartSdp->jsep);
+					sleep (3);
 
-					janus_mutex_unlock(&handleStartSdp->vsm_mutex);
+				//	janus_videoroom_message_free (handleStartSdp->msg);	
+				//	json_decref(handleStartSdp->event);
+				//	json_decref(handleStartSdp->jsep);
+
+				//	janus_mutex_unlock(&handleStartSdp->vsm_mutex);
 					break;
 				}
 			}
@@ -8032,6 +8037,7 @@ static void *vsm_handle_spd_response_for_client ()
 			roomInfo->isCompletedCandidateOfBrower1 = FALSE;
 			isSubOfVideoroom = FALSE;
 		}
+		/*
 		else if ((roomInfo->isSubscriberOfBrower1) && (roomInfo->isCompletedCandidateOfBrower2) && (isSubOfVideoroom == TRUE))
 		{
 			printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
@@ -8050,6 +8056,7 @@ static void *vsm_handle_spd_response_for_client ()
 			json_decref(handleOfferSdp->event);
 			json_decref(handleOfferSdp->jsep);
 		}
+		*/
 		sleep (1);
 		
 	}
