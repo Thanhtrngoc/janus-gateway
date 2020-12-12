@@ -1676,7 +1676,8 @@ int janus_process_incoming_request(janus_request *request) {
 					}
 					else
 					{
-						if (roomInfo->session_id[1] != session_id)
+						if (roomInfo->session_id[1] == 0)
+					//	if (roomInfo->session_id[1] != session_id)
 						{
 							roomInfo->session_id[1] = session_id;
 							session_id_of_brower2 = session_id;
@@ -1703,10 +1704,12 @@ int janus_process_incoming_request(janus_request *request) {
 							}
 							else
 							{
+								printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 								roomInfo->isSubscriberOfBrower1 = TRUE;
 								memcpy (roomInfo->user_id_str_of_brower2, feed_id_num, sizeof(roomInfo->user_id_str_of_brower2));
 								memcpy (roomInfo->transaction_text_of_brower1, g_strdup((char *)transaction_text), BUF_128);
 							}
+							printf("THANHTN: %s, %d, roomInfo->session_id[0] = %"SCNu64", roomInfo->session_id[1] = %"SCNu64", session_id = %"SCNu64"\n", __FUNCTION__, __LINE__, roomInfo->session_id[0], roomInfo->session_id[1], session_id);
 						}
 						else if (!strncmp (ptype_tmp_str, "publisher", sizeof (ptype_tmp_str)))
 						{
@@ -1718,6 +1721,7 @@ int janus_process_incoming_request(janus_request *request) {
 							else
 								memcpy (roomInfo->room_name_of_brower2, display_text, BUF_128);
 
+							printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 							roomInfo->isSubscriberOfBrower1 = FALSE;
 							roomInfo->isSubscriberOfBrower2 = FALSE;
 
@@ -1752,7 +1756,7 @@ int janus_process_incoming_request(janus_request *request) {
 
 				printf("THANHTN: %s, %d, %s, sdp_start_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__,  janus_sdp_write (sdp_start_brower1));
 				printf("THANHTN: %s, %d, %s, sdp_start_brower2 = %s\n", __FUNCTION__, __LINE__, __FILE__,  janus_sdp_write (sdp_start_brower2));
-				enableSdpStart = TRUE;
+			//	enableSdpStart = TRUE;
 			}
 		}
 
@@ -1918,11 +1922,22 @@ int janus_process_incoming_request(janus_request *request) {
 			if (roomInfo != NULL)
 			{
 				if (roomInfo->session_id[0] == session_id)
+				{
 					roomInfo->isCompletedCandidateOfBrower1 = CandidateIsCompleted;
-				else if (roomInfo->session_id[0] == session_id)
+				}
+				else if (roomInfo->session_id[1] == session_id)
+				{
 					roomInfo->isCompletedCandidateOfBrower2 = CandidateIsCompleted;
+				}
+
+				if (roomInfo->isCompletedCandidateOfBrower2 == TRUE)
+					enableSdpStart = TRUE;
+
+				printf("THANHTN: %s, %d, before excute janus_ice_trickle_parse,CandidateIsCompleted = %d, roomInfo->isCompletedCandidateOfBrower1 = %d, roomInfo->isCompletedCandidateOfBrower2 = %d\n", __FUNCTION__, __LINE__, CandidateIsCompleted, roomInfo->isCompletedCandidateOfBrower1, roomInfo->isCompletedCandidateOfBrower2);
+				printf("THANHTN: %s, %d, roomInfo->session_id[0] = %"SCNu64", roomInfo->session_id[1] = %"SCNu64", session_id = %"SCNu64"\n", __FUNCTION__, __LINE__, roomInfo->session_id[0], roomInfo->session_id[1], session_id);
+				
+				CandidateIsCompleted = FALSE;
 			}
-			printf("THANHTN: %s, %d, before excute janus_ice_trickle_parse,CandidateIsCompleted = %d, roomInfo->isCompletedCandidateOfBrower1 = %d, roomInfo->isCompletedCandidateOfBrower2 = %d\n", __FUNCTION__, __LINE__, CandidateIsCompleted, roomInfo->isCompletedCandidateOfBrower1, roomInfo->isCompletedCandidateOfBrower2);
 		} else {
 			/* We got multiple candidates in an array */
 			if(!json_is_array(candidates)) {
@@ -3601,7 +3616,7 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 		janus_refcount_decrease(&ice_handle->ref);
 		return JANUS_ERROR_SESSION_NOT_FOUND;
 	}
-	printf("THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+	printf("THANHTN: %s, %d, %s, session->session_id = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, session->session_id);
 	/* Make sure this is a JSON object */
 	if(!json_is_object(message)) {
 		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Cannot push event (JSON error: not an object)\n", ice_handle->handle_id);

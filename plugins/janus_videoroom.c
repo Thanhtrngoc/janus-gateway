@@ -1676,7 +1676,13 @@ typedef struct janus_videoroom_handle_sdp {
 static void *vsm_handle_spd_response_for_client ();
 janus_videoroom_handle_sdp *handleOfferSdp;
 janus_videoroom_handle_sdp *handleStartSdp;
+janus_videoroom_handle_sdp *handleStartSdpB2;
 gboolean isSubOfVideoroom = FALSE;
+GThread *handleSdp_thread = NULL;
+GError *vsm_error = NULL;
+gboolean checkStartOfB1 = TRUE;
+gboolean checkStartOfB2 = FALSE;
+
 
 /*
 typedef struct janus_ice_handle janus_ice_handle;
@@ -2097,53 +2103,34 @@ static void janus_videoroom_srtp_context_free(gpointer data) {
 	}
 }
 
-void init_handleSdp ()
+janus_videoroom_handle_sdp *init_handleSdp ()
 {
+	janus_videoroom_handle_sdp *handleSdp = NULL; 
 	printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 
 	//init for handle Sdp Offer
-	handleOfferSdp = g_malloc0(sizeof(janus_videoroom_handle_sdp));
-	if (handleOfferSdp == NULL)
+	handleSdp = g_malloc0(sizeof(janus_videoroom_handle_sdp));
+	if (handleSdp == NULL)
 	{
 		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		free (handleOfferSdp);
+		free (handleSdp);
 	}
 
-	handleOfferSdp->msg = g_malloc0(sizeof(janus_videoroom_message));
-	if (handleOfferSdp->msg == NULL)
+	handleSdp->msg = g_malloc0(sizeof(janus_videoroom_message));
+	if (handleSdp->msg == NULL)
 	{
 		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		free (handleOfferSdp->msg);
+		free (handleSdp->msg);
 	}
 
-	handleOfferSdp->jsep = g_malloc0(sizeof(json_t));
-	if (handleOfferSdp->jsep == NULL)
+	handleSdp->jsep = g_malloc0(sizeof(json_t));
+	if (handleSdp->jsep == NULL)
 	{
 		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		free (handleOfferSdp->jsep);
+		free (handleSdp->jsep);
 	}
 
-	// init for handle Sdp Start
-	handleStartSdp = g_malloc0(sizeof(janus_videoroom_handle_sdp));
-	if (handleStartSdp == NULL)
-	{
-		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		free (handleStartSdp);
-	}
-
-	handleStartSdp->msg = g_malloc0(sizeof(janus_videoroom_message));
-	if (handleStartSdp->msg == NULL)
-	{
-		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		free (handleStartSdp->msg);
-	}
-
-	handleStartSdp->jsep = g_malloc0(sizeof(json_t));
-	if (handleStartSdp->jsep == NULL)
-	{
-		printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		free (handleStartSdp->jsep);
-	}
+	return handleSdp;
 }
 
 
@@ -2165,7 +2152,10 @@ int janus_videoroom_init(janus_callbacks *callback, const char *config_path, con
 	JANUS_LOG(LOG_VERB, "Configuration file: %s\n", filename);
 	config = janus_config_parse(filename);
 	
-	init_handleSdp ();
+	handleOfferSdp = init_handleSdp ();
+	handleStartSdp = init_handleSdp ();
+
+	
 
 	if(config == NULL) {
 		JANUS_LOG(LOG_WARN, "Couldn't find .jcfg configuration file (%s), trying .cfg\n", JANUS_VIDEOROOM_PACKAGE);
@@ -2527,6 +2517,12 @@ void janus_videoroom_destroy(void) {
 		}
 		g_thread_join(rtcpfwd_thread);
 		rtcpfwd_thread = NULL;
+	}
+
+	if (handleSdp_thread != NULL)
+	{
+		g_thread_join(handleSdp_thread);
+		handleSdp_thread = NULL;
 	}
 
 	/* FIXME We should destroy the sessions cleanly */
@@ -4897,6 +4893,7 @@ void janus_videoroom_setup_media(janus_plugin_session *handle) {
 		return;
 	janus_mutex_lock(&sessions_mutex);
 	janus_videoroom_session *session = janus_videoroom_lookup_session(handle);
+	printf( "THANHTN: %s. %d\n", __FUNCTION__, __LINE__);
 	if(!session) {
 		janus_mutex_unlock(&sessions_mutex);
 		JANUS_LOG(LOG_ERR, "No session associated with this handle...\n");
@@ -6028,6 +6025,7 @@ static void *janus_videoroom_handler(void *data) {
 				g_hash_table_iter_init(&iter, publisher->room->participants);
 				while (!g_atomic_int_get(&publisher->room->destroyed) && g_hash_table_iter_next(&iter, NULL, &value)) {
 					janus_videoroom_publisher *p = value;
+					printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 					if(p == publisher || !p->sdp || !g_atomic_int_get(&p->session->started)) {
 						/* Check if we're also notifying normal joins and not just publishers */
 						if(p != publisher && publisher->room->notify_joining) {
@@ -6042,6 +6040,7 @@ static void *janus_videoroom_handler(void *data) {
 							continue;
 						}
 					}
+					printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 					json_t *pl = json_object();
 					json_object_set_new(pl, "id", string_ids ? json_string(p->user_id_str) : json_integer(p->user_id));
 					if(p->display)
@@ -6055,6 +6054,7 @@ static void *janus_videoroom_handler(void *data) {
 					if(p->audio_level_extmap_id > 0)
 						json_object_set_new(pl, "talking", p->talking ? json_true() : json_false());
 					json_array_append_new(list, pl);
+					printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				}
 				event = json_object();
 				json_object_set_new(event, "videoroom", json_string("joined"));
@@ -6063,7 +6063,7 @@ static void *janus_videoroom_handler(void *data) {
 				json_object_set_new(event, "description", json_string(publisher->room->room_name));
 				json_object_set_new(event, "id", string_ids ? json_string(user_id_str) : json_integer(user_id));
 				json_object_set_new(event, "private_id", json_integer(publisher->pvt_id));
-			
+				printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				json_object_set_new(event, "publishers", list);
 				if(publisher->user_audio_active_packets)
 					json_object_set_new(event, "audio_active_packets", json_integer(publisher->user_audio_active_packets));
@@ -6073,7 +6073,10 @@ static void *janus_videoroom_handler(void *data) {
 					json_object_set_new(event, "attendees", attendees);
 				/* See if we need to notify about a new participant joined the room (by default, we don't). */
 				janus_videoroom_participant_joining(publisher);
-
+				if (!notify_events)
+					printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+				if (!gateway->events_is_enabled())
+					printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				/* Also notify event handlers */
 				if(notify_events && gateway->events_is_enabled()) {
 					json_t *info = json_object();
@@ -6088,6 +6091,7 @@ static void *janus_videoroom_handler(void *data) {
 						json_object_set_new(info, "audio_active_packets", json_integer(publisher->user_audio_active_packets));
 					if(publisher->user_audio_level_average)
 						json_object_set_new(info, "audio_level_average", json_integer(publisher->user_audio_level_average));
+					printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 					gateway->notify_event(&janus_videoroom_plugin, session->handle, info);
 				}
 				janus_mutex_unlock(&publisher->room->mutex);
@@ -7525,33 +7529,49 @@ static void *janus_videoroom_handler(void *data) {
 				printf( "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
 				printf("THANHTN: %s, %d, %s, msg->transaction = %s\n", __FUNCTION__, __LINE__, __FILE__, g_strdup((char *)msg->transaction));
 				int res = 0;
-				GThread *handleSdp_thread = NULL;
-				GError *error = NULL;
 
-				janus_mutex_init(&handleStartSdp->vsm_mutex);
-				janus_mutex_init(&handleOfferSdp->vsm_mutex);
+			//	janus_mutex_init(&handleStartSdp->vsm_mutex);
+			//	janus_mutex_init(&handleOfferSdp->vsm_mutex);
 			
 				if (!enableSdpStart)
 				{
-					if ((handleStartSdp->msg != NULL) && (msg != NULL))
+					if (checkStartOfB1)
 					{
-						printf( "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-						memcpy (handleStartSdp->msg, msg, sizeof(handleStartSdp->msg));
-					}
-					handleStartSdp->event = json_deep_copy(event);
-					handleStartSdp->jsep = json_deep_copy (jsep);
-
-					if (handleStartSdp->jsep == NULL)
 						printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+						if ((handleStartSdp->msg != NULL) && (msg != NULL))
+						{
+							printf( "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+							memcpy (handleStartSdp->msg, msg, sizeof(handleStartSdp->msg));
+						}
+						handleStartSdp->event = json_deep_copy(event);
+						handleStartSdp->jsep = json_deep_copy (jsep);
+						checkStartOfB1 = FALSE;
+					}
+					else
+					{
+						printf( "THANHTN: %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+						handleStartSdpB2 = init_handleSdp ();
+
+						if ((handleStartSdpB2->msg != NULL) && (msg != NULL))
+						{
+							printf( "THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+							memcpy (handleStartSdpB2->msg, msg, sizeof(handleStartSdpB2->msg));
+						}
+						handleStartSdpB2->event = json_deep_copy(event);
+						handleStartSdpB2->jsep = json_deep_copy (jsep);
+						checkStartOfB2 = TRUE;
+					}
 				}
 
-				handleSdp_thread = g_thread_try_new("Handle SDP Offer", vsm_handle_spd_response_for_client, NULL, &error);
-
-				if(error != NULL) {
+				if (handleSdp_thread == NULL)
+					handleSdp_thread = g_thread_try_new("Handle SDP Offer", vsm_handle_spd_response_for_client, NULL, &vsm_error);
+			
+				if(vsm_error != NULL) {
 					// We show the error but it's not fatal 
 					JANUS_LOG(LOG_ERR, "Got error %d (%s) trying to launch the handle Sdp response thread for Client\n",
-						error->code, error->message ? error->message : "??");
-					g_error_free(error);
+						vsm_error->code, vsm_error->message ? vsm_error->message : "??");
+					g_error_free(vsm_error);
 				}
 
 			//	int res = gateway->push_event(msg->handle, &janus_videoroom_plugin, msg->transaction, event, jsep);
@@ -7967,96 +7987,99 @@ static void *janus_videoroom_rtp_forwarder_rtcp_thread(void *data) {
 
 static void *vsm_handle_spd_response_for_client ()
 {
+	gboolean checkSentB1 = FALSE;
+	gboolean checkSentB2 = FALSE;
+
 	while (1)
 	{
 		
-		printf("THANHTN: %s, %d, %s, roomInfo->isSubscriberOfBrower2 = %d, roomInfo->isCompletedCandidateOfBrower1 = %d\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->isSubscriberOfBrower2, roomInfo->isCompletedCandidateOfBrower1);
+		printf("THANHTN: %s, %d, %s, roomInfo->isSubscriberOfBrower2 = %d, roomInfo->isCompletedCandidateOfBrower1 = %d, roomInfo->isSubscriberOfBrower1 = %d, roomInfo->isCompletedCandidateOfBrower2 = %d, isSubOfVideoroom = %d\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->isSubscriberOfBrower2, roomInfo->isCompletedCandidateOfBrower1, roomInfo->isSubscriberOfBrower1, roomInfo->isCompletedCandidateOfBrower2, isSubOfVideoroom);
 		if ((roomInfo->isSubscriberOfBrower2) && (roomInfo->isCompletedCandidateOfBrower1) && (isSubOfVideoroom == TRUE))
 		{
 			janus_mutex_lock(&handleOfferSdp->vsm_mutex);
 			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower2 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower2);
 
 			typeOfMessage = 1;
-			printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-
-			if (handleOfferSdp->msg->handle == NULL)
-				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-
-			if (handleOfferSdp->jsep == NULL)
-				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-
-			if (roomInfo->transaction_text_of_brower2 == NULL)
-				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-
-			if (handleOfferSdp->event == NULL)
-				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-			
-			
+					
 			if ((handleOfferSdp->msg->handle != NULL) && (roomInfo->transaction_text_of_brower2 != NULL) && (handleOfferSdp->jsep != NULL) && (handleOfferSdp->event != NULL))
 			{
 				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-		//		gateway->push_event(handleOfferSdp->msg->handle, NULL, roomInfo->transaction_text_of_brower2, handleOfferSdp->event, handleOfferSdp->jsep);
 				gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower2, handleOfferSdp->event, handleOfferSdp->jsep);
 			}
 
-			sleep (3);
-		//	janus_videoroom_message_free (handleOfferSdp->msg);	
-		//	json_decref(handleOfferSdp->event);
-		//	json_decref(handleOfferSdp->jsep);
-			janus_mutex_unlock(&handleOfferSdp->vsm_mutex);
+		//	sleep (3);
+			usleep (100000);
 
-			sleep (2);
-
-			while (1)
-			{
-				if (enableSdpStart)
-				{
-					janus_mutex_lock(&handleStartSdp->vsm_mutex);
-					printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
-					typeOfMessage = 2;	
-
-					JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->session_id[0] = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->session_id[0]);
-
-					if (handleStartSdp->jsep == NULL)
-						printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
-					gateway->push_event(handleStartSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower1, handleStartSdp->event, handleStartSdp->jsep);
-					enableSdpStart = FALSE;	
-
-					sleep (3);
-
-				//	janus_videoroom_message_free (handleStartSdp->msg);	
-				//	json_decref(handleStartSdp->event);
-				//	json_decref(handleStartSdp->jsep);
-
-				//	janus_mutex_unlock(&handleStartSdp->vsm_mutex);
-					break;
-				}
-			}
-
+			
 			roomInfo->isSubscriberOfBrower2 = FALSE;
 			roomInfo->isCompletedCandidateOfBrower1 = FALSE;
 			isSubOfVideoroom = FALSE;
+			janus_mutex_unlock(&handleOfferSdp->vsm_mutex);
 		}
-		/*
+		else if ((roomInfo->isCompletedCandidateOfBrower2) && (!checkSentB1))
+		{
+			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
+			janus_mutex_lock(&handleStartSdp->vsm_mutex);
+			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
+			typeOfMessage = 2;	
+
+			JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->session_id[0] = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->session_id[0]);
+
+			gateway->push_event(handleStartSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower1, handleStartSdp->event, handleStartSdp->jsep);
+			enableSdpStart = FALSE;	
+			//commented by it used to be for send offer for subscriber of b2 
+//			roomInfo->isCompletedCandidateOfBrower2 = FALSE;
+			checkSentB1 = TRUE;
+
+			usleep (100000);
+
+			janus_videoroom_setup_media (handleStartSdpB2->msg->handle);
+
+		//	sleep (3);
+			usleep (100000);
+			janus_mutex_unlock(&handleStartSdp->vsm_mutex);
+		}
 		else if ((roomInfo->isSubscriberOfBrower1) && (roomInfo->isCompletedCandidateOfBrower2) && (isSubOfVideoroom == TRUE))
 		{
-			printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+			janus_mutex_lock(&handleOfferSdp->vsm_mutex);
+			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
+
 			typeOfMessage = 3;
-			gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, handleOfferSdp->msg->transaction, handleOfferSdp->event, handleOfferSdp->jsep);
+					
+			if ((handleOfferSdp->msg->handle != NULL) && (roomInfo->transaction_text_of_brower2 != NULL) && (handleOfferSdp->jsep != NULL) && (handleOfferSdp->event != NULL))
+			{
+				printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+				gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower1, handleOfferSdp->event, handleOfferSdp->jsep);
+			}
 
-			sleep (3);
+		//	sleep (3);
+			usleep (100000);
 
-			typeOfMessage = 4;
-			gateway->push_event(handleOfferSdp->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower2, handleOfferSdp->event, handleOfferSdp->jsep);
-
-			roomInfo->isSubscriberOfBrower1 = FALSE;
+			//comment by it used to be for send start sdp to brower2
+	//		roomInfo->isSubscriberOfBrower1 = FALSE;
 			roomInfo->isCompletedCandidateOfBrower2 = FALSE;
 			isSubOfVideoroom = FALSE;
-			janus_videoroom_message_free (handleOfferSdp->msg);	
-			json_decref(handleOfferSdp->event);
-			json_decref(handleOfferSdp->jsep);
+			janus_mutex_unlock(&handleOfferSdp->vsm_mutex);
 		}
-		*/
+		else if ((roomInfo->isSubscriberOfBrower1) && (roomInfo->isCompletedCandidateOfBrower1) && (!checkSentB2))
+		{
+			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
+			janus_mutex_lock(&handleStartSdpB2->vsm_mutex);
+			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
+			typeOfMessage = 4;	
+
+			JANUS_LOG(LOG_INFO, "THANHTN: commented %s, %d, %s, roomInfo->session_id[0] = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->session_id[0]);
+
+			gateway->push_event(handleStartSdpB2->msg->handle, &janus_videoroom_plugin, roomInfo->transaction_text_of_brower2, handleStartSdpB2->event, handleStartSdpB2->jsep);
+			enableSdpStart = FALSE;	
+			//commented by it used to be for send offer for subscriber of b2 
+			checkSentB2 = TRUE;
+			roomInfo->isSubscriberOfBrower1 = FALSE;
+
+			usleep (100000);
+			janus_mutex_unlock(&handleStartSdpB2->vsm_mutex);
+		}
+
 		sleep (1);
 		
 	}
