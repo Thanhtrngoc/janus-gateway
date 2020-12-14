@@ -1676,7 +1676,7 @@ typedef struct janus_videoroom_handle_sdp {
 static void *vsm_handle_spd_response_for_client ();
 janus_videoroom_handle_sdp *handleOfferSdp;
 janus_videoroom_handle_sdp *handleStartSdp;
-janus_videoroom_handle_sdp *handleStartSdpB2;
+janus_videoroom_handle_sdp *handleStartSdpB2 = NULL;
 gboolean isSubOfVideoroom = FALSE;
 GThread *handleSdp_thread = NULL;
 GError *vsm_error = NULL;
@@ -7987,8 +7987,7 @@ static void *janus_videoroom_rtp_forwarder_rtcp_thread(void *data) {
 
 static void *vsm_handle_spd_response_for_client ()
 {
-	gboolean checkSentB1 = FALSE;
-	gboolean checkSentB2 = FALSE;
+	gboolean checkSentB1 = FALSE, checkSentB2 = FALSE, checkSentNotifyPublisherList = FALSE;
 
 	while (1)
 	{
@@ -8031,14 +8030,27 @@ static void *vsm_handle_spd_response_for_client ()
 //			roomInfo->isCompletedCandidateOfBrower2 = FALSE;
 			checkSentB1 = TRUE;
 
-			usleep (100000);
-
-			janus_videoroom_setup_media (handleStartSdpB2->msg->handle);
-
+		/*	usleep (100000);
+			if (handleStartSdpB2 != NULL)
+				janus_videoroom_setup_media (handleStartSdpB2->msg->handle);
+		*/
 		//	sleep (3);
 			usleep (100000);
 			janus_mutex_unlock(&handleStartSdp->vsm_mutex);
 		}
+		else if ((roomInfo->isCompletedCandidateOfBrower2) && (!checkSentNotifyPublisherList) && (handleStartSdpB2 != NULL)) /*send notify to Brower 1 that Brower 2 is now publishing in room to brower 1 send subscriber*/ 
+		{
+
+			printf("THANHTN: commented %s, %d, %s\n", __FUNCTION__, __LINE__, __FILE__);
+
+			janus_mutex_lock(&handleStartSdpB2->vsm_mutex);
+
+			janus_videoroom_setup_media (handleStartSdpB2->msg->handle);
+			checkSentNotifyPublisherList = TRUE;
+		
+			janus_mutex_unlock(&handleStartSdpB2->vsm_mutex);
+		}
+
 		else if ((roomInfo->isSubscriberOfBrower1) && (roomInfo->isCompletedCandidateOfBrower2) && (isSubOfVideoroom == TRUE))
 		{
 			janus_mutex_lock(&handleOfferSdp->vsm_mutex);
@@ -8061,7 +8073,7 @@ static void *vsm_handle_spd_response_for_client ()
 			isSubOfVideoroom = FALSE;
 			janus_mutex_unlock(&handleOfferSdp->vsm_mutex);
 		}
-		else if ((roomInfo->isSubscriberOfBrower1) && (roomInfo->isCompletedCandidateOfBrower1) && (!checkSentB2))
+		else if ((roomInfo->isSubscriberOfBrower1) && (roomInfo->isCompletedCandidateOfBrower1) && (!checkSentB2) && (handleStartSdpB2 != NULL))
 		{
 			printf("THANHTN: commented %s, %d, %s, roomInfo->transaction_text_of_brower1 = %s\n", __FUNCTION__, __LINE__, __FILE__, roomInfo->transaction_text_of_brower1);
 			janus_mutex_lock(&handleStartSdpB2->vsm_mutex);
