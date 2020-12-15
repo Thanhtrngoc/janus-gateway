@@ -293,5 +293,16 @@ gint janus_is_stopping(void);
  * NEVER use it otherwise (it would simply not work with regular WebRTC endpoints).
  * @returns TRUE if WebRTC encryption is enabled (the default), and FALSE otherwise */
 gboolean janus_is_webrtc_encryption_enabled(void);
+extern janus_sdp *sdp_configure_brower1;
+extern janus_sdp *sdp_configure_brower2;
+extern janus_sdp *sdp_start_brower1;
+extern janus_sdp *sdp_start_brower2;
+extern gboolean CandidateIsCompleted;
+extern uint64_t session_id_of_brower1;
+extern uint64_t session_id_of_brower2;
+
+#define MAX_ELEMENT 10000
+#define BUF_128 128
+#define MAX_ROOM 1000
 
 #endif

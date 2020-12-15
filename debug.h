@@ -32,6 +32,8 @@ extern char *janus_log_global_prefix;
 #define ANSI_COLOR_RESET   "\x1b[0m"
 ///@}
 
+
+//Comment by THANHTN to set loglevel
 /** @name Janus log levels
  */
 ///@{
@@ -111,4 +113,29 @@ do { \
 } while (0)
 ///@}
 
+typedef struct room_info {
+	guint64 room_id;			/* Unique room ID (when using integers) */
+	gchar *room_id_str;			/* Unique room ID (when using strings) */
+	gchar *room_name_of_brower1;			/* Room description */
+	gchar *room_name_of_brower2;			/* Room description */
+	gchar *transaction_text_of_brower1;
+	gchar *transaction_text_of_brower2;
+	guint64 *session_id;
+	gchar *user_id_str_of_brower1;	/* feed_id, Unique ID in the room (when using strings) */
+	gchar *user_id_str_of_brower2;	/* feed_id, Unique ID in the room (when using strings) */
+	char *sdp_offer_request_configure; /* Sdp offer with request "configure" from brower, sdp_offer[0] for brower1, sdp_offer[1] for brower 2*/
+	char *sdp_answer_request_start; /* Sdp answer with request "start" from brower, sdp_answer[0] for brower1, sdp_answer[1] for brower 2*/
+	gboolean isCompletedCandidateOfBrower1; /*Brower1 sent "Completed Candidate"*/
+	gboolean isCompletedCandidateOfBrower2; /*Brower1 sent "Completed Candidate"*/
+	gboolean isSubscriberOfBrower2;
+	gboolean isSubscriberOfBrower1;
+
+	struct room_info *next; /*pointer to next element*/
+} room_info;
+
+extern room_info *roomInfo;
+extern int typeOfMessage;
+extern gboolean enableSdpStart;
+
 #endif
+

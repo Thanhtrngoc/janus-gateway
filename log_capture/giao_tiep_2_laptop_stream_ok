@@ -1,0 +1,20 @@
+THANHTN: janus_session_create. 733
+Creating new session: 6849868424888382; 0x7f8850001320
+Creating new handle in session 6849868424888382: 3242080061477803; 0x7f8850001320 0x7f8850001ab0
+[3242080061477803] Creating ICE agent (ICE Full mode, controlled)
+[3242080061477803] The DTLS handshake has been completed
+[janus.plugin.videoroom-0x7f8800008f50] WebRTC media is now available
+THANHTN: janus_session_create. 733
+Creating new session: 6400587192709326; 0x7f88500033b0
+Creating new handle in session 6400587192709326: 7671650270144562; 0x7f88500033b0 0x7f8850004330
+Creating new handle in session 6400587192709326: 1752943196638820; 0x7f88500033b0 0x7f8850005300
+[1752943196638820] Creating ICE agent (ICE Full mode, controlling)
+[1752943196638820] The DTLS handshake has been completed
+[janus.plugin.videoroom-0x7f88000151c0] WebRTC media is now available
+[7671650270144562] Creating ICE agent (ICE Full mode, controlled)
+[7671650270144562] The DTLS handshake has been completed
+[janus.plugin.videoroom-0x7f880000bf30] WebRTC media is now available
+Creating new handle in session 6849868424888382: 7536768493076657; 0x7f8850001320 0x7f88500058c0
+[7536768493076657] Creating ICE agent (ICE Full mode, controlling)
+[7536768493076657] The DTLS handshake has been completed
+[janus.plugin.videoroom-0x7f88000166f0] WebRTC media is now available

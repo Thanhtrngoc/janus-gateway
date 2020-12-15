@@ -38,6 +38,8 @@
 /* STUN server/port, if any */
 static char *janus_stun_server = NULL;
 static uint16_t janus_stun_port = 0;
+gboolean checkSentCompletedB2ForConfigure = FALSE;
+gboolean checkSentCompletedB2ForStart = FALSE;
 
 char *janus_ice_get_stun_server(void) {
 	return janus_stun_server;
@@ -760,8 +762,63 @@ janus_ice_trickle *janus_ice_trickle_new(const char *transaction, json_t *candid
 	return trickle;
 }
 
+char *janus_sdp_merge_edit_recv(janus_sdp *anon, char *candidate) {
+	if(anon == NULL || candidate == NULL)
+	{
+		JANUS_LOG(LOG_ERR, "THANHTN: %s, %d, Input is NULL\n", __FUNCTION__, __LINE__);
+		return NULL;
+	}
+
+	GList *temp = anon->m_lines;
+	
+	while(temp) {
+		janus_sdp_mline *m = (janus_sdp_mline *)temp->data;
+
+		if (!strncmp(candidate, "completed", sizeof(candidate)))
+		{
+			janus_sdp_attribute *end = janus_sdp_attribute_create("end-of-candidates", NULL);
+			m->attributes = g_list_append(m->attributes, end);
+			CandidateIsCompleted = TRUE;
+		}
+		else
+		{
+			JANUS_LOG(LOG_VERB, "THANHTN: %s, %d, candidate = %s\n", __FUNCTION__, __LINE__, candidate);
+			janus_sdp_attribute *a = janus_sdp_attribute_create("candidate", "%s", candidate);
+			m->attributes = g_list_append(m->attributes, a);
+		}
+		/* Next */
+		temp = temp->next;
+	}
+
+	char *sdp = janus_sdp_write(anon);
+
+	JANUS_LOG(LOG_VERB, " -------------------------------------------\n");
+	JANUS_LOG(LOG_VERB, "  >> Merged (%zu bytes)\n", strlen(sdp));
+	JANUS_LOG(LOG_VERB, " -------------------------------------------\n");
+	JANUS_LOG(LOG_VERB, "%s\n", sdp);
+
+	return sdp;
+}
+
+char *removeCandidateString (char *trickleCandidate)
+{
+	char *token = NULL;
+
+	if (trickleCandidate == NULL)
+		return NULL;
+
+	token = strtok (trickleCandidate, ":");
+	token = strtok (NULL, ":");
+
+	return token;
+}
+
 gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const char **error) {
 	const char *ignore_error = NULL;
+	janus_session *session = handle->session;
+	char *parseCandidate = NULL;
+	char tmp[100] = {0};
+
 	if(error == NULL) {
 		error = &ignore_error;
 	}
@@ -773,6 +830,30 @@ gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const 
 	if(!json_is_object(candidate) || json_object_get(candidate, "completed") != NULL) {
 		JANUS_LOG(LOG_VERB, "No more remote candidates for handle %"SCNu64"!\n", handle->handle_id);
 		janus_flags_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_ALL_TRICKLES);
+
+		JANUS_LOG(LOG_VERB, "THANHTN: %s, %d, %s, session->session_id = %"SCNu64", session_id_of_brower1 = %"SCNu64", session_id_of_brower2 = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, session->session_id, session_id_of_brower1, session_id_of_brower2);
+		
+		if (session->session_id == session_id_of_brower1)
+		{
+			janus_sdp_merge_edit_recv (sdp_configure_brower1, "completed");
+			if (sdp_start_brower1 != NULL)
+				janus_sdp_merge_edit_recv (sdp_start_brower1, "completed");
+		}
+		else if (session->session_id == session_id_of_brower2)
+		{
+			if ((sdp_configure_brower2 != NULL) && (!checkSentCompletedB2ForConfigure))
+			{
+				janus_sdp_merge_edit_recv (sdp_configure_brower2, "completed");
+				checkSentCompletedB2ForConfigure = TRUE;
+			}
+			if ((sdp_start_brower2 != NULL) && (!checkSentCompletedB2ForStart))
+			{
+				janus_sdp_merge_edit_recv (sdp_start_brower2, "completed");
+				checkSentCompletedB2ForStart = TRUE;
+			}
+			CandidateIsCompleted = TRUE;
+		}
+
 	} else {
 		/* Handle remote candidate */
 		json_t *mid = json_object_get(candidate, "sdpMid");
@@ -798,7 +879,35 @@ gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const 
 			*error = "Trickle error: invalid element type (candidate should be a string)";
 			return JANUS_ERROR_INVALID_ELEMENT_TYPE;
 		}
+
 		JANUS_LOG(LOG_VERB, "[%"SCNu64"] Trickle candidate (%s): %s\n", handle->handle_id, json_string_value(mid), json_string_value(rc));
+
+		JANUS_LOG(LOG_VERB, "THANHTN: %s, %d, %s, session->session_id = %"SCNu64", session_id_of_brower1 = %"SCNu64", session_id_of_brower2 = %"SCNu64"\n", __FUNCTION__, __LINE__, __FILE__, session->session_id, session_id_of_brower1, session_id_of_brower2);
+		
+		memcpy (tmp, json_string_value(rc), sizeof(tmp)); 
+
+		if (tmp[0] != 0)
+		{
+			parseCandidate = removeCandidateString (tmp);
+		}
+		if (parseCandidate != NULL)
+		{
+			if (session->session_id == session_id_of_brower1)
+			{
+				if (sdp_configure_brower1 != NULL)
+					janus_sdp_merge_edit_recv (sdp_configure_brower1, parseCandidate);
+				if (sdp_start_brower1 != NULL)
+					janus_sdp_merge_edit_recv (sdp_start_brower1, parseCandidate);
+			}
+			else if (session->session_id == session_id_of_brower2)
+			{
+				if (sdp_configure_brower2 != NULL)
+					janus_sdp_merge_edit_recv (sdp_configure_brower2, parseCandidate);
+				if (sdp_start_brower2 != NULL)
+					janus_sdp_merge_edit_recv (sdp_start_brower2, parseCandidate);
+			}
+		}
+
 		/* Parse it */
 		int sdpMLineIndex = mline ? json_integer_value(mline) : -1;
 		const char *sdpMid = json_string_value(mid);
@@ -819,6 +928,7 @@ gint janus_ice_trickle_parse(janus_ice_handle *handle, json_t *candidate, const 
 			/* FIXME Should we return an error? */
 		}
 	}
+	
 	return 0;
 }
 
@@ -1196,6 +1306,7 @@ janus_ice_handle *janus_ice_handle_create(void *core_session, const char *opaque
 		}
 	}
 	handle = (janus_ice_handle *)g_malloc0(sizeof(janus_ice_handle));
+	
 	JANUS_LOG(LOG_INFO, "Creating new handle in session %"SCNu64": %"SCNu64"; %p %p\n", session->session_id, handle_id, core_session, handle);
 	janus_refcount_init(&handle->ref, janus_ice_handle_free);
 	janus_refcount_increase(&session->ref);
@@ -1854,7 +1965,8 @@ static void janus_ice_cb_component_state_changed(NiceAgent *agent, guint stream_
 		if(component->icestate_source == NULL && component->icefailed_detected == 0) {
 			component->icefailed_detected = janus_get_monotonic_time();
 			component->icestate_source = g_timeout_source_new(500);
-			g_source_set_callback(component->icestate_source, janus_ice_check_failed, component, NULL);
+//			g_source_set_callback(component->icestate_source, janus_ice_check_failed, component, NULL);
+			g_source_set_callback(component->icestate_source, FALSE, component, NULL);
 			guint id = g_source_attach(component->icestate_source, handle->mainctx);
 			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Creating ICE state check timer with ID %u\n", handle->handle_id, id);
 		}
@@ -3382,6 +3494,7 @@ int janus_ice_setup_local(janus_ice_handle *handle, int offer, int audio, int vi
 
 	/* Note: NICE_COMPATIBILITY_RFC5245 is only available in more recent versions of libnice */
 	handle->controlling = janus_ice_lite_enabled ? FALSE : !offer;
+	
 	JANUS_LOG(LOG_INFO, "[%"SCNu64"] Creating ICE agent (ICE %s mode, %s)\n", handle->handle_id,
 		janus_ice_lite_enabled ? "Lite" : "Full", handle->controlling ? "controlling" : "controlled");
 	handle->agent = g_object_new(NICE_TYPE_AGENT,
@@ -4087,6 +4200,7 @@ static gboolean janus_ice_outgoing_traffic_handle(janus_ice_handle *handle, janu
 	janus_session *session = (janus_session *)handle->session;
 	janus_ice_stream *stream = handle->stream;
 	janus_ice_component *component = stream ? stream->component : NULL;
+
 	if(pkt == &janus_ice_start_gathering) {
 		/* Start gathering candidates */
 		if(handle->agent == NULL) {
@@ -4913,6 +5027,7 @@ void janus_ice_dtls_handshake_done(janus_ice_handle *handle, janus_ice_component
 	g_source_set_priority(handle->stats_source, G_PRIORITY_DEFAULT);
 	g_source_attach(handle->stats_source, handle->mainctx);
 	janus_mutex_unlock(&handle->mutex);
+	
 	JANUS_LOG(LOG_INFO, "[%"SCNu64"] The DTLS handshake has been completed\n", handle->handle_id);
 	/* Notify the plugin that the WebRTC PeerConnection is ready to be used */
 	janus_plugin *plugin = (janus_plugin *)handle->app;

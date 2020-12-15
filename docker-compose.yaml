@@ -1,0 +1,13 @@
+version: '2.0'
+services:
+  janus-gateway:
+    image: janus-gateway:1.3
+    build: .
+    ports:
+      - 8188:8188
+      - 8080:8080
+      - 8089:8089
+    restart: always
+    volumes:
+      - ".:/root/janus-gateway"
+    tty: true

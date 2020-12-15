@@ -1,0 +1,211 @@
+192.168.0.35
+-----------------------------------------------------------------------------
+
+--------------------------------------------------------
+259	15.451355448	192.168.0.35	192.168.0.30	HTTP	440	POST /janus HTTP/1.1  (application/json)
+{"janus":"create","transaction":"4vAFAe10n55h"}
+---------------------------------------------------------------------------------------------------------
+262	15.451790491	192.168.0.30	192.168.0.35	HTTP	172	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "success",
+   "transaction": "4vAFAe10n55h",
+   "data": {
+      "id": 4433043958001763
+   }
+}
+--------------------------------------------------------------------------
+272	15.477626670	192.168.0.35	192.168.0.30	HTTP	533	POST /janus/4433043958001763 HTTP/1.1  (application/json)
+{"janus":"attach","plugin":"janus.plugin.videoroom","opaque_id":"videoroomtest-Vq7m5naXxh5z","transaction":"G8XmRZhFHliR"}
+--------------------------------------------------------------------------------------
+275	15.478260283	192.168.0.30	192.168.0.35	HTTP	207	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "success",
+   "session_id": 4433043958001763,
+   "transaction": "G8XmRZhFHliR",
+   "data": {
+      "id": 7258948888692621
+   }
+}
+---------------------------------------------------------------------------------------
+376	17.453595017	192.168.0.35	192.168.0.30	HTTP	551	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+
+{"janus":"message","body":{"request":"join","room":1234,"ptype":"publisher","display":"hkjl"},"transaction":"1aBD35Bwe242"}
+=============================================================================================================================
+379	17.454375991	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "1aBD35Bwe242"
+}
+----------------------------------------------------------------------------------------------------------------------------
+381	17.454564566	192.168.0.30	192.168.0.35	HTTP	521	HTTP/1.1 200 OK  (application/json)
+[
+   {
+      "janus": "event",
+      "session_id": 4433043958001763,
+      "transaction": "1aBD35Bwe242",
+      "sender": 7258948888692621,
+      "plugindata": {
+         "plugin": "janus.plugin.videoroom",
+         "data": {
+            "videoroom": "joined",
+            "room": 1234,
+            "description": "Demo Room",
+            "id": 8447689457739418,
+            "private_id": 1947376802,
+            "publishers": []
+         }
+      }
+   }
+]
+-------------------------------------------------------------------------------------------------------------------------
+630	22.264711393	192.168.0.35	192.168.0.30	HTTP	1999	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+
+{"janus":"message","body":{"request":"configure","audio":true,"video":true},"transaction":"Q7a3QejlY6JG","jsep":{"type":"offer","sdp":"v=0\r\no=mozilla...THIS_IS_SDPARTA-82.0.3 3894647314973539540 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=fingerprint:sha-256 AD:6F:63:BF:58:C7:73:37:E3:C6:D7:60:EF:43:DB:17:96:A4:B3:CF:EA:A7:84:E3:45:02:24:AD:5A:03:A7:56\r\na=group:BUNDLE 0 1\r\na=ice-options:trickle\r\na=msid-semantic:WMS *\r\nm=audio 9 UDP/TLS/RTP/SAVPF 109 9 0 8 101\r\nc=IN IP4 0.0.0.0\r\na=sendonly\r\na=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level\r\na=extmap:2/recvonly urn:ietf:params:rtp-hdrext:csrc-audio-level\r\na=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=fmtp:109 maxplaybackrate=48000;stereo=1;useinbandfec=1\r\na=fmtp:101 0-15\r\na=ice-pwd:ceb3b6fc46d83ff2282080e2358aed38\r\na=ice-ufrag:856799a8\r\na=mid:0\r\na=msid:{4e185017-a31c-49ee-8f76-d16e4dcdf098} {249cfd07-4073-4bad-aebf-09d95aba731c}\r\na=rtcp-mux\r\na=rtpmap:109 opus/48000/2\r\na=rtpmap:9 G722/8000/1\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:8 PCMA/8000\r\na=rtpmap:101 telephone-event/8000/1\r\na=setup:actpass\r\na=ssrc:3314492991 cname:{4130964f-b0f3-4321-9d58-1efe04d7b2dd}\r\nm=video 9 UDP/TLS/RTP/SAVPF 120 124 121 125 126 127 97 98\r\nc=IN IP4 0.0.0.0\r\na=sendonly\r\na=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=extmap:4 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time\r\na=extmap:5 urn:ietf:params:rtp-hdrext:toffset\r\na=extmap:6/recvonly http://www.webrtc.org/experiments/rtp-hdrext/playout-delay\r\na=extmap:7 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=fmtp:126 profile-level-id=42e01f;level-asymmetry-allowed=1;packetization-mode=1\r\na=fmtp:97 profile-level-id=42e01f;level-asymmetry-allowed=1\r\na=fmtp:120 max-fs=12288;max-fr=60\r\na=fmtp:124 apt=120\r\na=fmtp:121 max-fs=12288;max-fr=60\r\na=fmtp:125 apt=121\r\na=fmtp:127 apt=126\r\na=fmtp:98 apt=97\r\na=ice-pwd:ceb3b6fc46d83ff2282080e2358aed38\r\na=ice-ufrag:856799a8\r\na=mid:1\r\na=msid:{4e185017-a31c-49ee-8f76-d16e4dcdf098} {05071073-2a3e-42c1-b35f-47010918f3f1}\r\na=rtcp-fb:120 nack\r\na=rtcp-fb:120 nack pli\r\na=rtcp-fb:120 ccm fir\r\na=rtcp-fb:120 goog-remb\r\na=rtcp-fb:120 transport-cc\r\na=rtcp-fb:121 nack\r\na=rtcp-fb:121 nack pli\r\na=rtcp-fb:121 ccm fir\r\na=rtcp-fb:121 goog-remb\r\na=rtcp-fb:121 transport-cc\r\na=rtcp-fb:126 nack\r\na=rtcp-fb:126 nack pli\r\na=rtcp-fb:126 ccm fir\r\na=rtcp-fb:126 goog-remb\r\na=rtcp-fb:126 transport-cc\r\na=rtcp-fb:97 nack\r\na=rtcp-fb:97 nack pli\r\na=rtcp-fb:97 ccm fir\r\na=rtcp-fb:97 goog-remb\r\na=rtcp-fb:97 transport-cc\r\na=rtcp-mux\r\na=rtcp-rsize\r\na=rtpmap:120 VP8/90000\r\na=rtpmap:124 rtx/90000\r\na=rtpmap:121 VP9/90000\r\na=rtpmap:125 rtx/90000\r\na=rtpmap:126 H264/90000\r\na=rtpmap:127 rtx/90000\r\na=rtpmap:97 H264/90000\r\na=rtpmap:98 rtx/90000\r\na=setup:actpass\r\na=ssrc:357021573 cname:{4130964f-b0f3-4321-9d58-1efe04d7b2dd}\r\na=ssrc:1614969201 cname:{4130964f-b0f3-4321-9d58-1efe04d7b2dd}\r\na=ssrc-group:FID 357021573 1614969201\r\n"}}
+======================================================================================================================================
+633	22.267996253	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "Q7a3QejlY6JG"
+}
+--------------------------------------------------------------------------------------------------------
+637	22.269487096	192.168.0.30	192.168.0.35	HTTP	1196	HTTP/1.1 200 OK  (application/json)
+[
+   {
+      "janus": "event",
+      "session_id": 4433043958001763,
+      "transaction": "Q7a3QejlY6JG",
+      "sender": 7258948888692621,
+      "plugindata": {
+         "plugin": "janus.plugin.videoroom",
+         "data": {
+            "videoroom": "event",
+            "room": 1234,
+            "configured": "ok",
+            "audio_codec": "opus",
+            "video_codec": "h264"
+         }
+      },
+      "jsep": {
+         "type": "answer",
+         "sdp": "v=0\r\no=mozilla...THIS_IS_SDPARTA-82.0.3 1605516678227253 1 IN IP4 192.168.13.159\r\ns=VideoRoom 1234\r\nt=0 0\r\na=group:BUNDLE 0 1\r\na=msid-semantic: WMS janus\r\nm=audio 9 UDP/TLS/RTP/SAVPF 109\r\nc=IN IP4 192.168.13.159\r\na=recvonly\r\na=mid:0\r\na=rtcp-mux\r\na=ice-ufrag:guwT\r\na=ice-pwd:OIWT9q1KobBKfa3Cncw0W3\r\na=ice-options:trickle\r\na=fingerprint:sha-256 68:D2:04:2C:2F:11:FC:AC:1A:00:BC:0A:6B:09:51:77:D0:1D:91:8C:72:21:7A:04:51:D0:0F:6F:7C:16:66:7E\r\na=setup:active\r\na=rtpmap:109 opus/48000/2\r\na=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level\r\na=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=msid:janus janusa0\r\na=ssrc:2104464343 cname:janus\r\na=ssrc:2104464343 msid:janus janusa0\r\na=ssrc:2104464343 mslabel:janus\r\na=ssrc:2104464343 label:janusa0\r\na=candidate:1 1 udp 2013266431 192.168.0.30 46187 typ host\r\na=end-of-candidates\r\nm=video 9 UDP/TLS/RTP/SAVPF 126 127\r\nc=IN IP4 192.168.13.159\r\na=recvonly\r\na=mid:1\r\na=rtcp-mux\r\na=ice-ufrag:guwT\r\na=ice-pwd:OIWT9q1KobBKfa3Cncw0W3\r\na=ice-options:trickle\r\na=fingerprint:sha-256 68:D2:04:2C:2F:11:FC:AC:1A:00:BC:0A:6B:09:51:77:D0:1D:91:8C:72:21:7A:04:51:D0:0F:6F:7C:16:66:7E\r\na=setup:active\r\na=rtpmap:126 H264/90000\r\na=rtcp-fb:126 ccm fir\r\na=rtcp-fb:126 nack\r\na=rtcp-fb:126 nack pli\r\na=rtcp-fb:126 goog-remb\r\na=rtcp-fb:126 transport-cc\r\na=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid\r\na=extmap:6/inactive http://www.webrtc.org/experiments/rtp-hdrext/playout-delay\r\na=extmap:7 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\na=fmtp:126 profile-level-id=42e01f;level-asymmetry-allowed=1;packetization-mode=1\r\na=rtpmap:127 rtx/90000\r\na=fmtp:127 apt=126\r\na=msid:janus janusv0\r\na=ssrc:3459170875 cname:janus\r\na=ssrc:3459170875 msid:janus janusv0\r\na=ssrc:3459170875 mslabel:janus\r\na=ssrc:3459170875 label:janusv0\r\na=ssrc:1913260384 cname:janus\r\na=ssrc:1913260384 msid:janus janusv0\r\na=ssrc:1913260384 mslabel:janus\r\na=ssrc:1913260384 label:janusv0\r\na=candidate:1 1 udp 2013266431 192.168.0.30 46187 typ host\r\na=end-of-candidates\r\n"
+      }
+   }
+]
+======================================================================================================================================
+639	22.288059888	192.168.0.35	192.168.0.30	HTTP	592	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+{"janus":"trickle","candidate":{"candidate":"candidate:0 1 UDP 2122252543 192.168.0.35 49774 typ host","sdpMid":"0","sdpMLineIndex":0},"transaction":"2BrOY2kl5flg"}
+
+----------------------------------------------------------------------------------------------------------------------
+
+{"janus":"trickle","candidate":{"candidate":"candidate:2 1 TCP 2105524479 192.168.0.35 9 typ host tcptype active","sdpMid":"0","sdpMLineIndex":0},"transaction":"2NugxyVXB6KC"}
+----------------------------------------------------------------------------------------------------------------------------------
+642	22.288240704	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "2BrOY2kl5flg"
+}
+--------------------------------------------------------------------------------------------------------------------------------------
+644	22.299614382	192.168.0.35	192.168.0.30	STUN	138	Binding Request user: guwT:856799a8
+======================================================================================================================================
+645	22.300733302	192.168.0.35	192.168.0.30	HTTP	603	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+{"janus":"trickle","candidate":{"candidate":"candidate:2 1 TCP 2105524479 192.168.0.35 9 typ host tcptype active","sdpMid":"0","sdpMLineIndex":0},"transaction":"2NugxyVXB6KC"}
+--------------------------------------------------------------
+651	22.310704010	192.168.0.35	192.168.0.30	STUN	106	Binding Success Response XOR-MAPPED-ADDRESS: 192.168.0.30:46187
+--------------------------------------------------------------------------------------------------------------------------------------
+648	22.301341389	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "2NugxyVXB6KC"
+}
+==========================================================================================================================================
+652	22.319941608	192.168.0.35	192.168.0.30	HTTP	592	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+{"janus":"trickle","candidate":{"candidate":"candidate:0 2 UDP 2122252542 192.168.0.35 49775 typ host","sdpMid":"0","sdpMLineIndex":0},"transaction":"KphKnbsP3Rvd"}
+--------------------------------------------------------------------------------------------------------------------------------------
+658	22.320522007	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "KphKnbsP3Rvd"
+}
+--------------------------------------------------------------------------------------------------------------------------------------------
+663	22.334441090	192.168.0.35	192.168.0.30	HTTP	603	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+{"janus":"trickle","candidate":{"candidate":"candidate:2 2 TCP 2105524478 192.168.0.35 9 typ host tcptype active","sdpMid":"0","sdpMLineIndex":0},"transaction":"4myRagVb0puB"}
+
+==================================================================================================================================
+665	22.335214366	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "4myRagVb0puB"
+}
+
+-----------------------------------------------------------------------------------------------------------------
+668	22.355992604	192.168.0.35	192.168.0.30	HTTP	592	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+
+{"janus":"trickle","candidate":{"candidate":"candidate:0 1 UDP 2122252543 192.168.0.35 49776 typ host","sdpMid":"1","sdpMLineIndex":1},"transaction":"aH9MNGY2AsD5"}
+======================================================================================================================================
+670	22.356554986	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "aH9MNGY2AsD5"
+}
+-------------------------------------------------------------------------------------------------------------------------------------
+672	22.386164769	192.168.0.35	192.168.0.30	HTTP	603	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+
+{"janus":"trickle","candidate":{"candidate":"candidate:2 1 TCP 2105524479 192.168.0.35 9 typ host tcptype active","sdpMid":"1","sdpMLineIndex":1},"transaction":"r6ENZLjPCHpv"}
+-------------------------------------------------------------------------------------------------------------------------------------
+674	22.386792025	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "r6ENZLjPCHpv"
+}
+----------------------------------------------------------------------
+699	22.429044084	192.168.0.35	192.168.0.30	HTTP	592	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+{"janus":"trickle","candidate":{"candidate":"candidate:0 2 UDP 2122252542 192.168.0.35 49777 typ host","sdpMid":"1","sdpMLineIndex":1},"transaction":"sPOKAqWBqlwS"}
+-------------------------------------------------------------------------------------------------------------------------
+702	22.429603808	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "sPOKAqWBqlwS"
+}
+--------------------------------------------------------------------------------------------------------------------------
+732	22.448107964	192.168.0.35	192.168.0.30	HTTP	603	POST /janus/4433043958001763/7258948888692621 HTTP/1.1  (application/json)
+{"janus":"trickle","candidate":{"candidate":"candidate:2 2 TCP 2105524478 192.168.0.35 9 typ host tcptype active","sdpMid":"1","sdpMLineIndex":1},"transaction":"71dZHUE28pP7"}
+------------------------------------------------------------------------------------------------------
+734	22.448659239	192.168.0.30	192.168.0.35	HTTP	155	HTTP/1.1 200 OK  (application/json)
+{
+   "janus": "ack",
+   "session_id": 4433043958001763,
+   "transaction": "71dZHUE28pP7"
+}
+-------------------------------------------------------------------------------------------------------------------
+739	22.469326780	192.168.0.30	192.168.0.35	HTTP	319	HTTP/1.1 200 OK  (application/json)
+[
+   {
+      "janus": "webrtcup",
+      "session_id": 4433043958001763,
+      "sender": 7258948888692621
+   },
+   {
+      "janus": "media",
+      "session_id": 4433043958001763,
+      "sender": 7258948888692621,
+      "type": "audio",
+      "receiving": true
+   }
+]----------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+

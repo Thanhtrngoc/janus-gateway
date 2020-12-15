@@ -73,7 +73,16 @@ static GHashTable *plugins_so = NULL;
 /* Daemonization */
 static gboolean daemonize = FALSE;
 static int pipefd[2];
-
+janus_sdp *sdp_configure_brower1 = NULL;
+janus_sdp *sdp_configure_brower2 = NULL;
+janus_sdp *sdp_start_brower1 = NULL;
+janus_sdp *sdp_start_brower2 = NULL;
+gboolean CandidateIsCompleted  = FALSE;
+room_info *roomInfo = NULL;
+uint64_t session_id_of_brower1 = 0;
+uint64_t session_id_of_brower2 = 0;
+int typeOfMessage = 0;
+gboolean enableSdpStart = FALSE;
 
 #ifdef REFCOUNT_DEBUG
 /* Reference counters debugging */
@@ -87,6 +96,10 @@ static char *api_secret = NULL, *admin_api_secret = NULL;
 
 /* JSON parameters */
 static int janus_process_error_string(janus_request *request, uint64_t session_id, const char *transaction, gint error, gchar *error_string);
+room_info *newRoom ();
+room_info *findRoom(room_info *room, guint64 room_id);
+room_info *deleteRoom(room_info *room, guint64 room_id);
+room_info *deleteList (room_info *room);
 
 static struct janus_json_parameter incoming_request_parameters[] = {
 	{"transaction", JSON_STRING, JANUS_JSON_PARAM_REQUIRED},
@@ -588,6 +601,7 @@ void janus_plugin_end_session(janus_plugin_session *plugin_session);
 void janus_plugin_notify_event(janus_plugin *plugin, janus_plugin_session *plugin_session, json_t *event);
 gboolean janus_plugin_auth_is_signature_valid(janus_plugin *plugin, const char *token);
 gboolean janus_plugin_auth_signature_contains(janus_plugin *plugin, const char *token, const char *desc);
+json_t *vsm_janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *sdp_type, const char *sdp, gboolean restart);
 static janus_callbacks janus_handler_plugin =
 	{
 		.push_event = janus_plugin_push_event,
@@ -1135,7 +1149,8 @@ int janus_process_incoming_request(janus_request *request) {
 		json_t *reply = janus_create_message("ack", session_id, transaction_text);
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
-	} else if(!strcasecmp(message_text, "attach")) {
+	} 
+	else if(!strcasecmp(message_text, "attach")) {
 		if(handle != NULL) {
 			/* Attach is a session-level command */
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
@@ -1195,33 +1210,35 @@ int janus_process_incoming_request(janus_request *request) {
 		json_object_set_new(reply, "data", data);
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
-	} else if(!strcasecmp(message_text, "destroy")) {
+	} 
+	else if(!strcasecmp(message_text, "destroy")) {
 		if(handle != NULL) {
-			/* Query is a session-level command */
+			// Query is a session-level command 
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
 			goto jsondone;
 		}
 		janus_mutex_lock(&sessions_mutex);
 		g_hash_table_remove(sessions, &session->session_id);
 		janus_mutex_unlock(&sessions_mutex);
-		/* Notify the source that the session has been destroyed */
+		// Notify the source that the session has been destroyed 
 		janus_request *source = janus_session_get_request(session);
 		if(source && source->transport)
 			source->transport->session_over(source->instance, session->session_id, FALSE, FALSE);
 		janus_request_unref(source);
 
-		/* Schedule the session for deletion */
+		// Schedule the session for deletion 
 		janus_session_destroy(session);
 
-		/* Prepare JSON reply */
+		// Prepare JSON reply 
 		json_t *reply = janus_create_message("success", session_id, transaction_text);
-		/* Send the success reply */
+		// Send the success reply 
 		ret = janus_process_success(request, reply);
-		/* Notify event handlers as well */
+		// Notify event handlers as well 
 		if(janus_events_is_enabled())
 			janus_events_notify_handlers(JANUS_EVENT_TYPE_SESSION, JANUS_EVENT_SUBTYPE_NONE,
 				session_id, "destroyed", NULL);
-	} else if(!strcasecmp(message_text, "detach")) {
+	} 
+	else if(!strcasecmp(message_text, "detach")) {
 		if(handle == NULL) {
 			/* Query is an handle-level command */
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
@@ -1242,9 +1259,10 @@ int janus_process_incoming_request(janus_request *request) {
 		json_t *reply = janus_create_message("success", session_id, transaction_text);
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
-	} else if(!strcasecmp(message_text, "hangup")) {
+	} 	
+	else if(!strcasecmp(message_text, "hangup")) {
 		if(handle == NULL) {
-			/* Query is an handle-level command */
+			// Query is an handle-level command 
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
 			goto jsondone;
 		}
@@ -1253,11 +1271,12 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		janus_ice_webrtc_hangup(handle, "Janus API");
-		/* Prepare JSON reply */
+		// Prepare JSON reply 
 		json_t *reply = janus_create_message("success", session_id, transaction_text);
-		/* Send the success reply */
+		// Send the success reply 
 		ret = janus_process_success(request, reply);
-	} else if(!strcasecmp(message_text, "claim")) {
+	} 
+	else if(!strcasecmp(message_text, "claim")) {
 		janus_mutex_lock(&session->mutex);
 		if(session->source != NULL) {
 			/* If we're claiming from the same transport, ignore */
@@ -1290,7 +1309,8 @@ int janus_process_incoming_request(janus_request *request) {
 		json_object_set_new(reply, "transaction", json_string(transaction_text));
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
-	} else if(!strcasecmp(message_text, "message")) {
+	} 
+	else if(!strcasecmp(message_text, "message")) {
 		if(handle == NULL) {
 			/* Query is an handle-level command */
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
@@ -1310,10 +1330,21 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		json_t *body = json_object_get(root, "body");
+		json_t *request_tmp = NULL; 
+		request_tmp = json_object_get(body, "request");
+		char *request_tmp_str = NULL;
+
+		if (request_tmp != NULL)
+			request_tmp_str = g_strdup(json_string_value(request_tmp));
+
+
 		/* Is there an SDP attached? */
 		json_t *jsep = json_object_get(root, "jsep");
 		char *jsep_type = NULL;
 		char *jsep_sdp = NULL, *jsep_sdp_stripped = NULL;
+		char error_str[512];
+		error_str[0] = '\0';
+		int audio = 0, video = 0, data = 0;
 		gboolean renegotiation = FALSE;
 		if(jsep != NULL) {
 			if(!json_is_object(jsep)) {
@@ -1364,6 +1395,7 @@ int janus_process_incoming_request(janus_request *request) {
 					}
 				}
 			}
+
 			/* Check if we're renegotiating (if we have an answer, we did an offer/answer round already) */
 			renegotiation = janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_NEGOTIATED);
 			/* Check the JSEP type */
@@ -1387,14 +1419,28 @@ int janus_process_incoming_request(janus_request *request) {
 				janus_mutex_unlock(&handle->mutex);
 				goto jsondone;
 			}
+
 			json_t *sdp = json_object_get(jsep, "sdp");
 			jsep_sdp = (char *)json_string_value(sdp);
-			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Remote SDP:\n%s", handle->handle_id, jsep_sdp);
+	
+			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Remote SDP:\n%s", handle->handle_id, jsep_sdp);	
+
+			if (request_tmp == NULL)
+			{
+				request_tmp = json_object_get(body, "request");
+
+				if (request_tmp != NULL)
+					request_tmp_str = g_strdup(json_string_value(request_tmp));
+			}			
+		
+
 			/* Is this valid SDP? */
-			char error_str[512];
+		/*	char error_str[512];
 			error_str[0] = '\0';
 			int audio = 0, video = 0, data = 0;
+		*/
 			janus_sdp *parsed_sdp = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+
 			if(parsed_sdp == NULL) {
 				/* Invalid SDP */
 				ret = janus_process_error_string(request, session_id, transaction_text, JANUS_ERROR_JSEP_INVALID_SDP, error_str);
@@ -1454,6 +1500,7 @@ int janus_process_incoming_request(janus_request *request) {
 						goto jsondone;
 					}
 				}
+				
 				if(janus_sdp_process(handle, parsed_sdp, rids_hml, FALSE) < 0) {
 					JANUS_LOG(LOG_ERR, "Error processing SDP\n");
 					janus_sdp_destroy(parsed_sdp);
@@ -1585,6 +1632,106 @@ int janus_process_incoming_request(janus_request *request) {
 		/* Send the message to the plugin (which must eventually free transaction_text and unref the two objects, body and jsep) */
 		json_incref(body);
 		json_t *body_jsep = NULL;
+		char *ptype_tmp_str = NULL;
+		guint64 feed_id = 0;
+		char feed_id_num[30];
+
+		if (request_tmp_str != NULL)
+		{
+
+			if (!strncmp (request_tmp_str, "join", sizeof (request_tmp_str)))
+			{
+				json_t *jroom_id = json_object_get(body, "room");
+				guint64 room_id_tmp = 0;
+
+				if (jroom_id != NULL)
+				{
+					room_id_tmp = json_integer_value(jroom_id);
+					roomInfo = findRoom(roomInfo, room_id_tmp);
+					if (roomInfo == NULL)
+					{
+						roomInfo = newRoom ();
+						roomInfo->room_id = room_id_tmp;
+						if (roomInfo->session_id[0] != session_id)
+						{	
+							roomInfo->session_id[0] = session_id;
+							session_id_of_brower1 = session_id;
+						}		
+					}
+					else
+					{
+						if (roomInfo->session_id[1] == 0)
+						{
+							roomInfo->session_id[1] = session_id;
+							session_id_of_brower2 = session_id;
+						}
+					}
+					json_t *ptype_tmp = json_object_get(body, "ptype");
+
+					if (ptype_tmp != NULL)
+					{
+						ptype_tmp_str = g_strdup(json_string_value(ptype_tmp));
+						if (!strncmp (ptype_tmp_str, "subscriber", sizeof (ptype_tmp_str)))
+						{
+							json_t *feed = json_object_get(body, "feed");
+							feed_id = json_integer_value(feed);
+							g_snprintf(feed_id_num, sizeof(feed_id_num), "%"SCNu64, feed_id);
+
+							// because brower will only send feed when It want to subscriber 
+							if (roomInfo->session_id[1] == session_id)
+							{
+								roomInfo->isSubscriberOfBrower2 = TRUE;
+								roomInfo->user_id_str_of_brower1 = feed_id_num;
+								memcpy (roomInfo->transaction_text_of_brower2, g_strdup((char *)transaction_text), BUF_128);
+							}
+							else
+							{
+								roomInfo->isSubscriberOfBrower1 = TRUE;
+								memcpy (roomInfo->user_id_str_of_brower2, feed_id_num, sizeof(roomInfo->user_id_str_of_brower2));
+								memcpy (roomInfo->transaction_text_of_brower1, g_strdup((char *)transaction_text), BUF_128);
+							}
+						}
+						else if (!strncmp (ptype_tmp_str, "publisher", sizeof (ptype_tmp_str)))
+						{
+							json_t *display = json_object_get(body, "display");
+							char *display_text = display ? json_string_value(display) : NULL;
+					
+							if (roomInfo->session_id[0] == session_id)
+								memcpy (roomInfo->room_name_of_brower1, display_text, BUF_128);
+							else
+								memcpy (roomInfo->room_name_of_brower2, display_text, BUF_128);
+
+							roomInfo->isSubscriberOfBrower1 = FALSE;
+							roomInfo->isSubscriberOfBrower2 = FALSE;
+
+						}
+					}
+				}
+
+			}
+			else if ((!strncmp (request_tmp_str, "configure", sizeof (request_tmp_str))) &&
+					(roomInfo != NULL) && (roomInfo->room_id > 0))
+			{
+				if (roomInfo->transaction_text_of_brower1[0] == 0)
+					memcpy (roomInfo->transaction_text_of_brower1, g_strdup((char *)transaction_text), BUF_128);
+				else
+					memcpy (roomInfo->transaction_text_of_brower2, g_strdup((char *)transaction_text), BUF_128);
+				
+				if (roomInfo->session_id[0] == session_id)
+					sdp_configure_brower1 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+				else
+					sdp_configure_brower2 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+			}
+			else if ((!strncmp (request_tmp_str, "start", sizeof (request_tmp_str))) &&
+					(roomInfo != NULL) && (roomInfo->room_id > 0))
+			{
+				if (roomInfo->session_id[0] == session_id)
+					sdp_start_brower1 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+				else
+					sdp_start_brower2 = janus_sdp_preparse(handle, jsep_sdp, error_str, sizeof(error_str), &audio, &video, &data);
+			}
+		}
+
 		if(jsep_sdp_stripped) {
 			body_jsep = json_pack("{ssss}", "type", jsep_type, "sdp", jsep_sdp_stripped);
 			/* Check if simulcasting is enabled */
@@ -1670,6 +1817,7 @@ int janus_process_incoming_request(janus_request *request) {
 			goto jsondone;
 		}
 		janus_plugin_result_destroy(result);
+		
 	} else if(!strcasecmp(message_text, "trickle")) {
 		if(handle == NULL) {
 			/* Trickle is an handle-level command */
@@ -1690,6 +1838,7 @@ int janus_process_incoming_request(janus_request *request) {
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_JSON, "Can't have both candidate and candidates");
 			goto jsondone;
 		}
+		
 		if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_CLEANING)) {
 			JANUS_LOG(LOG_ERR, "[%"SCNu64"] Received a trickle, but still cleaning a previous session\n", handle->handle_id);
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_WEBRTC_STATE, "Still cleaning a previous session");
@@ -1711,9 +1860,12 @@ int janus_process_incoming_request(janus_request *request) {
 			goto trickledone;
 		}
 		/* Is the ICE stack ready already? */
-		if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER) ||
+	/*	if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER) ||
 				!janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER) ||
 				!janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_ANSWER)) {
+	*/
+		if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER) ||
+				!janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER)) {
 			const char *cause = NULL;
 			if(janus_flags_is_set(&handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER))
 				cause = "processing the offer";
@@ -1737,6 +1889,26 @@ int janus_process_incoming_request(janus_request *request) {
 				ret = janus_process_error(request, session_id, transaction_text, error, "%s", error_string);
 				janus_mutex_unlock(&handle->mutex);
 				goto jsondone;
+			}
+
+			if (roomInfo != NULL)
+			{
+				if (roomInfo->session_id[0] == session_id)
+				{
+					roomInfo->isCompletedCandidateOfBrower1 = CandidateIsCompleted;
+				}
+				else if (roomInfo->session_id[1] == session_id)
+				{
+					roomInfo->isCompletedCandidateOfBrower2 = CandidateIsCompleted;
+				}
+
+				if (roomInfo->isCompletedCandidateOfBrower2 == TRUE)
+					enableSdpStart = TRUE;
+
+				JANUS_LOG(LOG_VERB, "THANHTN: %s, %d, CandidateIsCompleted = %d, roomInfo->isCompletedCandidateOfBrower1 = %d, roomInfo->isCompletedCandidateOfBrower2 = %d\n", __FUNCTION__, __LINE__, CandidateIsCompleted, roomInfo->isCompletedCandidateOfBrower1, roomInfo->isCompletedCandidateOfBrower2);
+				JANUS_LOG(LOG_VERB, "THANHTN: %s, %d, roomInfo->session_id[0] = %"SCNu64", roomInfo->session_id[1] = %"SCNu64", session_id = %"SCNu64"\n", __FUNCTION__, __LINE__, roomInfo->session_id[0], roomInfo->session_id[1], session_id);
+				
+				CandidateIsCompleted = FALSE;
 			}
 		} else {
 			/* We got multiple candidates in an array */
@@ -2886,7 +3058,7 @@ int janus_process_success(janus_request *request, json_t *payload)
 	if(!request || !payload)
 		return -1;
 	/* Pass to the right transport plugin */
-	JANUS_LOG(LOG_HUGE, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
+	JANUS_LOG(LOG_INFO, "Sending %s API response to %s (%p)\n", request->admin ? "admin" : "Janus", request->transport->get_package(), request->instance);
 	return request->transport->send_message(request->instance, request->request_id, request->admin, payload);
 }
 
@@ -3391,15 +3563,22 @@ janus_plugin *janus_plugin_find(const gchar *package) {
 /* Plugin callback interface */
 int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *transaction, json_t *message, json_t *jsep) {
 	if(!plugin || !message)
+	{
+		JANUS_LOG (LOG_ERR, "%s, %d, input is NULL", __FUNCTION__, __LINE__);
 		return -1;
+	}
 	if(!janus_plugin_session_is_alive(plugin_session))
+	{
+		JANUS_LOG (LOG_ERR, "%s, %d, The session was destroyed", __FUNCTION__, __LINE__);
 		return -2;
+	}
 	janus_refcount_increase(&plugin_session->ref);
 	janus_ice_handle *ice_handle = (janus_ice_handle *)plugin_session->gateway_handle;
 	if(!ice_handle || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_STOP)) {
 		janus_refcount_decrease(&plugin_session->ref);
 		return JANUS_ERROR_SESSION_NOT_FOUND;
 	}
+	
 	janus_refcount_increase(&ice_handle->ref);
 	janus_session *session = ice_handle->session;
 	if(!session || g_atomic_int_get(&session->destroyed)) {
@@ -3407,6 +3586,7 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 		janus_refcount_decrease(&ice_handle->ref);
 		return JANUS_ERROR_SESSION_NOT_FOUND;
 	}
+	
 	/* Make sure this is a JSON object */
 	if(!json_is_object(message)) {
 		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Cannot push event (JSON error: not an object)\n", ice_handle->handle_id);
@@ -3414,14 +3594,18 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 		janus_refcount_decrease(&ice_handle->ref);
 		return JANUS_ERROR_INVALID_JSON_OBJECT;
 	}
+	
 	/* Attach JSEP if possible? */
 	const char *sdp_type = json_string_value(json_object_get(jsep, "type"));
 	const char *sdp = json_string_value(json_object_get(jsep, "sdp"));
 	gboolean restart = json_object_get(jsep, "sdp") ? json_is_true(json_object_get(jsep, "restart")) : FALSE;
 	gboolean e2ee = json_object_get(jsep, "sdp") ? json_is_true(json_object_get(jsep, "e2ee")) : FALSE;
 	json_t *merged_jsep = NULL;
+	
 	if(sdp_type != NULL && sdp != NULL) {
-		merged_jsep = janus_plugin_handle_sdp(plugin_session, plugin, sdp_type, sdp, restart);
+	//	merged_jsep = janus_plugin_handle_sdp(plugin_session, plugin, sdp_type, sdp, restart);		
+		merged_jsep = vsm_janus_plugin_handle_sdp(plugin_session, plugin, sdp_type, sdp, restart);
+
 		if(merged_jsep == NULL) {
 			if(ice_handle == NULL || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_STOP)
 					|| janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_ALERT)) {
@@ -3437,6 +3621,7 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 			}
 		}
 	}
+
 	/* Reference the payload, as the plugin may still need it and will do a decref itself */
 	json_incref(message);
 	/* Prepare JSON event */
@@ -3476,6 +3661,358 @@ int janus_plugin_push_event(janus_plugin_session *plugin_session, janus_plugin *
 	janus_refcount_decrease(&plugin_session->ref);
 	janus_refcount_decrease(&ice_handle->ref);
 	return JANUS_OK;
+}
+
+
+json_t *vsm_janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *sdp_type, const char *sdp, gboolean restart) {
+	if(!janus_plugin_session_is_alive(plugin_session) ||
+			plugin == NULL || sdp_type == NULL || sdp == NULL) {
+		JANUS_LOG(LOG_ERR, "Invalid arguments\n");
+		return NULL;
+	}
+	janus_ice_handle *ice_handle = (janus_ice_handle *)plugin_session->gateway_handle;
+	//~ if(ice_handle == NULL || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_READY)) {
+	if(ice_handle == NULL) {
+		JANUS_LOG(LOG_ERR, "Invalid ICE handle\n");
+		return NULL;
+	}
+	int offer = 0;
+	if(!strcasecmp(sdp_type, "offer")) {
+		// This is an offer from a plugin 
+		offer = 1;
+		janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER);
+		janus_flags_clear(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_ANSWER);
+	} else if(!strcasecmp(sdp_type, "answer")) {
+		// This is an answer from a plugin
+		janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_ANSWER);
+		if(janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_GOT_OFFER))
+			janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_NEGOTIATED);
+	} else {
+		// TODO Handle other messages
+		JANUS_LOG(LOG_ERR, "Unknown type '%s'\n", sdp_type);
+		return NULL;
+	}
+	
+	// Is this valid SDP? 
+	char error_str[512];
+	error_str[0] = '\0';
+	int audio = 0, video = 0, data = 0;
+	janus_sdp *parsed_sdp = janus_sdp_preparse(ice_handle, sdp, error_str, sizeof(error_str), &audio, &video, &data);
+	if(parsed_sdp == NULL) {
+		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Couldn't parse SDP... %s\n", ice_handle->handle_id, error_str);
+		return NULL;
+	}
+	gboolean updating = FALSE;
+	if(offer) {
+		// We may still not have a local ICE setup 
+		JANUS_LOG(LOG_VERB, "[%"SCNu64"] Audio %s been negotiated\n", ice_handle->handle_id, audio ? "has" : "has NOT");
+		if(audio > 1) {
+			JANUS_LOG(LOG_ERR, "[%"SCNu64"] More than one audio line? only going to negotiate one...\n", ice_handle->handle_id);
+		}
+		JANUS_LOG(LOG_VERB, "[%"SCNu64"] Video %s been negotiated\n", ice_handle->handle_id, video ? "has" : "has NOT");
+		if(video > 1) {
+			JANUS_LOG(LOG_ERR, "[%"SCNu64"] More than one video line? only going to negotiate one...\n", ice_handle->handle_id);
+		}
+		JANUS_LOG(LOG_VERB, "[%"SCNu64"] SCTP/DataChannels %s been negotiated\n", ice_handle->handle_id, data ? "have" : "have NOT");
+		if(data > 1) {
+			JANUS_LOG(LOG_ERR, "[%"SCNu64"] More than one data line? only going to negotiate one...\n", ice_handle->handle_id);
+		}
+#ifndef HAVE_SCTP
+		if(data) {
+			JANUS_LOG(LOG_WARN, "[%"SCNu64"]   -- DataChannels have been negotiated, but support for them has not been compiled...\n", ice_handle->handle_id);
+		}
+#endif
+		// Are we still cleaning up from a previous media session? 
+		if(janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_CLEANING)) {
+			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Still cleaning up from a previous media session, let's wait a bit...\n", ice_handle->handle_id);
+			gint64 waited = 0;
+			while(janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_CLEANING)) {
+				JANUS_LOG(LOG_VERB, "[%"SCNu64"] Still cleaning up from a previous media session, let's wait a bit...\n", ice_handle->handle_id);
+				g_usleep(100000);
+				waited += 100000;
+				if(waited >= 3*G_USEC_PER_SEC) {
+					JANUS_LOG(LOG_VERB, "[%"SCNu64"]   -- Waited 3 seconds, that's enough!\n", ice_handle->handle_id);
+					JANUS_LOG(LOG_ERR, "[%"SCNu64"] Still cleaning a previous session\n", ice_handle->handle_id);
+					janus_sdp_destroy(parsed_sdp);
+					return NULL;
+				}
+			}
+		}
+		if(ice_handle->agent == NULL) {
+			// We still need to configure the WebRTC stuff: negotiate RFC4588 by default 
+			janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_RFC4588_RTX);
+			// Process SDP in order to setup ICE locally (this is going to result in an answer from the browser) 
+			janus_mutex_lock(&ice_handle->mutex);
+			if(janus_ice_setup_local(ice_handle, 0, audio, video, data, 1) < 0) {
+				JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error setting ICE locally\n", ice_handle->handle_id);
+				janus_sdp_destroy(parsed_sdp);
+				janus_mutex_unlock(&ice_handle->mutex);
+				return NULL;
+			}
+			janus_mutex_unlock(&ice_handle->mutex);
+		} else {
+			updating = TRUE;
+			JANUS_LOG(LOG_INFO, "[%"SCNu64"] Updating existing session\n", ice_handle->handle_id);
+			if(offer && ice_handle->stream) {
+				// We might need some new properties set as well 
+				janus_ice_stream *stream = ice_handle->stream;
+				if(audio) {
+					if(!janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_AUDIO)) {
+						janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_AUDIO);
+						stream->audio_ssrc = janus_random_uint32();	// FIXME Should we look for conflicts?
+						if(stream->audio_rtcp_ctx == NULL) {
+							stream->audio_rtcp_ctx = g_malloc0(sizeof(rtcp_context));
+							stream->audio_rtcp_ctx->tb = 48000;	// May change later 
+						}
+					}
+					if(ice_handle->audio_mid == NULL)
+						ice_handle->audio_mid = g_strdup("audio");
+				}
+				if(video) {
+					if(!janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_VIDEO)) {
+						janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_HAS_VIDEO);
+						stream->video_ssrc = janus_random_uint32();	// FIXME Should we look for conflicts? 
+						if(stream->video_rtcp_ctx[0] == NULL) {
+							stream->video_rtcp_ctx[0] = g_malloc0(sizeof(rtcp_context));
+							stream->video_rtcp_ctx[0]->tb = 90000;	// May change later 
+						}
+					}
+					if(ice_handle->video_mid == NULL)
+						ice_handle->video_mid = g_strdup("video");
+				}
+				if(data) {
+					if(ice_handle->data_mid == NULL)
+						ice_handle->data_mid = g_strdup("data");
+				}
+			}
+		}
+		// Make sure we don't send the rid/repaired-rid attributes when offering ourselves 
+		int mid_ext_id = 0, transport_wide_cc_ext_id = 0, audiolevel_ext_id = 0, videoorientation_ext_id = 0;
+		GList *temp = parsed_sdp->m_lines;
+		while(temp) {
+			janus_sdp_mline *m = (janus_sdp_mline *)temp->data;
+			GList *tempA = m->attributes;
+			while(tempA) {
+				janus_sdp_attribute *a = (janus_sdp_attribute *)tempA->data;
+				if(a->name && a->value) {
+					if(strstr(a->value, JANUS_RTP_EXTMAP_MID))
+						mid_ext_id = atoi(a->value);
+					else if(strstr(a->value, JANUS_RTP_EXTMAP_TRANSPORT_WIDE_CC))
+						transport_wide_cc_ext_id = atoi(a->value);
+					else if(strstr(a->value, JANUS_RTP_EXTMAP_AUDIO_LEVEL))
+						audiolevel_ext_id = atoi(a->value);
+					else if(strstr(a->value, JANUS_RTP_EXTMAP_VIDEO_ORIENTATION))
+						videoorientation_ext_id = atoi(a->value);
+					else if(strstr(a->value, JANUS_RTP_EXTMAP_RID) ||
+							strstr(a->value, JANUS_RTP_EXTMAP_REPAIRED_RID)) {
+						m->attributes = g_list_remove(m->attributes, a);
+						tempA = m->attributes;
+						janus_sdp_attribute_destroy(a);
+						continue;
+					}
+				}
+				tempA = tempA->next;
+			}
+			temp = temp->next;
+		}
+		if(ice_handle->stream && ice_handle->stream->mid_ext_id != mid_ext_id)
+			ice_handle->stream->mid_ext_id = mid_ext_id;
+		if(ice_handle->stream && ice_handle->stream->transport_wide_cc_ext_id != transport_wide_cc_ext_id) {
+			ice_handle->stream->do_transport_wide_cc = transport_wide_cc_ext_id > 0 ? TRUE : FALSE;
+			ice_handle->stream->transport_wide_cc_ext_id = transport_wide_cc_ext_id;
+		}
+		if(ice_handle->stream && ice_handle->stream->audiolevel_ext_id != audiolevel_ext_id)
+			ice_handle->stream->audiolevel_ext_id = audiolevel_ext_id;
+		if(ice_handle->stream && ice_handle->stream->videoorientation_ext_id != videoorientation_ext_id)
+			ice_handle->stream->videoorientation_ext_id = videoorientation_ext_id;
+	} else {
+		// Check if the answer does contain the mid/rid/repaired-rid attributes 
+		gboolean do_mid = FALSE, do_rid = FALSE, do_repaired_rid = FALSE;
+		GList *temp = parsed_sdp->m_lines;
+		while(temp) {
+			janus_sdp_mline *m = (janus_sdp_mline *)temp->data;
+			GList *tempA = m->attributes;
+			while(tempA) {
+				janus_sdp_attribute *a = (janus_sdp_attribute *)tempA->data;
+				if(a->name && a->value) {
+					if(strstr(a->value, JANUS_RTP_EXTMAP_MID))
+						do_mid = TRUE;
+					else if(strstr(a->value, JANUS_RTP_EXTMAP_RID))
+						do_rid = TRUE;
+					else if(strstr(a->value, JANUS_RTP_EXTMAP_REPAIRED_RID))
+						do_repaired_rid = TRUE;
+				}
+				tempA = tempA->next;
+			}
+			temp = temp->next;
+		}
+		if(!do_mid && ice_handle->stream)
+			ice_handle->stream->mid_ext_id = 0;
+		if(!do_rid && ice_handle->stream) {
+			ice_handle->stream->rid_ext_id = 0;
+			ice_handle->stream->ridrtx_ext_id = 0;
+			g_free(ice_handle->stream->rid[0]);
+			ice_handle->stream->rid[0] = NULL;
+			g_free(ice_handle->stream->rid[1]);
+			ice_handle->stream->rid[1] = NULL;
+			g_free(ice_handle->stream->rid[2]);
+			ice_handle->stream->rid[2] = NULL;
+			if(ice_handle->stream->video_ssrc_peer_temp > 0) {
+				ice_handle->stream->video_ssrc_peer[0] = ice_handle->stream->video_ssrc_peer_temp;
+				ice_handle->stream->video_ssrc_peer_temp = 0;
+			}
+		}
+		if(!do_repaired_rid && ice_handle->stream)
+			ice_handle->stream->ridrtx_ext_id = 0;
+	}
+	if(!updating && !janus_ice_is_full_trickle_enabled()) {
+		// Wait for candidates-done callback 
+		int waiting = 0;
+		while(ice_handle->cdone < 1) {
+			if(ice_handle == NULL || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_STOP)
+					|| janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_ALERT)) {
+				JANUS_LOG(LOG_WARN, "[%"SCNu64"] Handle detached or PC closed, giving up...!\n", ice_handle ? ice_handle->handle_id : 0);
+				janus_sdp_destroy(parsed_sdp);
+				return NULL;
+			}
+			if(ice_handle->cdone < 0) {
+				JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error gathering candidates!\n", ice_handle->handle_id);
+				janus_sdp_destroy(parsed_sdp);
+				return NULL;
+			}
+			if(waiting && (waiting % 5000) == 0) {
+				JANUS_LOG(LOG_WARN, "[%"SCNu64"] Waited 5s for candidates, that's way too much... going on with what we have (WebRTC setup might fail)\n", ice_handle->handle_id);
+				break;
+			}
+			if(waiting && (waiting % 1000) == 0) {
+				JANUS_LOG(LOG_WARN, "[%"SCNu64"] %s for candidates-done callback... (slow gathering, are you using STUN or TURN for Janus too, instead of just for users? Consider enabling full-trickle instead)\n",
+					ice_handle->handle_id, (waiting == 1000 ? "Waiting" : "Still waiting"));
+			}
+			waiting++;
+			g_usleep(1000);
+		}
+	}
+	// Anonymize SDP 
+	if(janus_sdp_anonymize(parsed_sdp) < 0) {
+		// Invalid SDP 
+		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Invalid SDP\n", ice_handle->handle_id);
+		janus_sdp_destroy(parsed_sdp);
+		return NULL;
+	}
+
+	// Check if this is a renegotiation and we need an ICE restart 
+	if(offer && restart)
+		janus_ice_restart(ice_handle);
+	// Add our details 
+	janus_mutex_lock(&ice_handle->mutex);
+	janus_ice_stream *stream = ice_handle->stream;
+	if (stream == NULL) {
+		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error stream not found\n", ice_handle->handle_id);
+		janus_mutex_unlock(&ice_handle->mutex);
+		return NULL;
+	}
+	if(janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_RFC4588_RTX) &&
+			stream->rtx_payload_types == NULL) {
+		// Make sure we have a list of rtx payload types to generate, if needed 
+		janus_sdp_mline *m = janus_sdp_mline_find(parsed_sdp, JANUS_SDP_VIDEO);
+		if(m && m->ptypes) {
+			stream->rtx_payload_types = g_hash_table_new(NULL, NULL);
+			GList *ptypes = g_list_copy(m->ptypes), *tempP = ptypes;
+			GList *rtx_ptypes = g_hash_table_get_values(stream->rtx_payload_types);
+			while(tempP) {
+				int ptype = GPOINTER_TO_INT(tempP->data);
+				int rtx_ptype = ptype+1;
+				if(rtx_ptype > 127)
+					rtx_ptype = 96;
+				while(g_list_find(m->ptypes, GINT_TO_POINTER(rtx_ptype))
+						|| g_list_find(rtx_ptypes, GINT_TO_POINTER(rtx_ptype))) {
+					rtx_ptype++;
+					if(rtx_ptype > 127)
+						rtx_ptype = 96;
+					if(rtx_ptype == ptype) {
+						// We did a whole round? should never happen... 
+						rtx_ptype = -1;
+						break;
+					}
+				}
+				if(rtx_ptype > 0)
+					g_hash_table_insert(stream->rtx_payload_types, GINT_TO_POINTER(ptype), GINT_TO_POINTER(rtx_ptype));
+				g_list_free(rtx_ptypes);
+				rtx_ptypes = g_hash_table_get_values(stream->rtx_payload_types);
+				tempP = tempP->next;
+			}
+			g_list_free(ptypes);
+			g_list_free(rtx_ptypes);
+		}
+	}
+	
+	// Enrich the SDP the plugin gave us with all the WebRTC related stuff 
+
+	char *sdp_merged = NULL;
+
+	if (typeOfMessage == 1)
+    {
+        sdp_merged = janus_sdp_write(sdp_configure_brower1);
+    }
+	else if (typeOfMessage == 2)
+    {
+        sdp_merged = janus_sdp_write(sdp_start_brower2);
+    }
+	else if (typeOfMessage == 3)
+    {
+        sdp_merged = janus_sdp_write(sdp_configure_brower2);
+    }
+    else if (typeOfMessage == 4)
+    {
+        sdp_merged = janus_sdp_write(sdp_start_brower1);
+    }
+
+
+	JANUS_LOG (LOG_VERB, "THANHTN: %s, %d, %s, typeOfMessage = %d, sdp_merged = %s\n", __FUNCTION__, __LINE__, __FILE__, typeOfMessage, sdp_merged);
+
+	if(sdp_merged == NULL) {
+		// Couldn't merge SDP 
+		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error merging SDP\n", ice_handle->handle_id);
+		janus_sdp_destroy(parsed_sdp);
+		janus_mutex_unlock(&ice_handle->mutex);
+		return NULL;
+	}
+
+	janus_sdp_destroy(parsed_sdp);
+
+	if(!updating) {
+		if(offer) {
+			// We set the flag to wait for an answer before handling trickle candidates 
+			janus_flags_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_PROCESSING_OFFER);
+		} else {
+			JANUS_LOG(LOG_VERB, "[%"SCNu64"] Sending answer, ready to setup remote candidates and send connectivity checks...\n", ice_handle->handle_id);
+			janus_request_ice_handle_answer(ice_handle, audio, video, data, NULL);
+		}
+	}
+#ifdef HAVE_SCTP
+	if(!offer && janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_READY)) {
+		// Renegotiation: check if datachannels were just added on an existing PeerConnection 
+		if(janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_DATA_CHANNELS)) {
+			janus_ice_stream *stream = ice_handle->stream;
+			if(stream != NULL && stream->component != NULL &&
+					stream->component->dtls != NULL && stream->component->dtls->sctp == NULL) {
+				// Create SCTP association as well 
+				JANUS_LOG(LOG_WARN, "[%"SCNu64"] Creating datachannels...\n", ice_handle->handle_id);
+				janus_dtls_srtp_create_sctp(stream->component->dtls);
+			}
+		}
+	}
+#endif
+
+	// Prepare JSON event 
+	json_t *jsep = json_object();
+	json_object_set_new(jsep, "type", json_string(sdp_type));
+	json_object_set_new(jsep, "sdp", json_string(sdp_merged));
+	char *tmp = ice_handle->local_sdp;
+	ice_handle->local_sdp = sdp_merged;
+	janus_mutex_unlock(&ice_handle->mutex);
+	g_free(tmp);
+	return jsep;
 }
 
 json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plugin *plugin, const char *sdp_type, const char *sdp, gboolean restart) {
@@ -3760,6 +4297,7 @@ json_t *janus_plugin_handle_sdp(janus_plugin_session *plugin_session, janus_plug
 	}
 	/* Enrich the SDP the plugin gave us with all the WebRTC related stuff */
 	char *sdp_merged = janus_sdp_merge(ice_handle, parsed_sdp, offer ? TRUE : FALSE);
+
 	if(sdp_merged == NULL) {
 		/* Couldn't merge SDP */
 		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Error merging SDP\n", ice_handle->handle_id);
@@ -3980,6 +4518,68 @@ gboolean janus_plugin_auth_signature_contains(janus_plugin *plugin, const char *
 	return janus_auth_check_signature_contains(token, plugin->get_package(), descriptor);
 }
 
+room_info *newRoom ()
+{
+	room_info *room = (room_info *) g_malloc (sizeof (room_info));
+
+	room->room_id = 0;
+	room->room_id_str =  g_malloc0(BUF_128);
+	room->transaction_text_of_brower1 = g_malloc0(BUF_128);
+	room->transaction_text_of_brower2 = g_malloc0(BUF_128);
+	room->session_id = g_malloc0(2);
+	room->user_id_str_of_brower1 = g_malloc0(BUF_128);
+	room->user_id_str_of_brower2 = g_malloc0(BUF_128);
+	room->sdp_answer_request_start = g_malloc0(MAX_ELEMENT);
+	room->sdp_offer_request_configure = g_malloc0(MAX_ELEMENT);
+	room->isCompletedCandidateOfBrower1 = FALSE;
+	room->isCompletedCandidateOfBrower2 = FALSE;
+	room->isSubscriberOfBrower1 = FALSE;
+	room->isSubscriberOfBrower2 = FALSE;
+	room->room_name_of_brower1 = g_malloc0(BUF_128);
+	room->room_name_of_brower2 = g_malloc0(BUF_128);
+	room->next = NULL;
+
+	return room;
+}
+
+room_info *findRoom(room_info *room, guint64 room_id)
+{
+	if (room == NULL || room->room_id == room_id)
+		return room;
+	else
+		return findRoom (room->next, room_id);
+	
+}
+
+room_info *deleteRoom(room_info *room, guint64 room_id)
+{
+	room_info *tmp;
+
+	if (room != NULL)
+	{
+		if (room->room_id == room_id)
+		{
+			tmp = room->next;
+			free (room);
+			room = tmp;
+		}
+		else
+			room->next = deleteRoom (room->next, room_id);
+	}
+
+	return room;
+}
+
+room_info *deleteList (room_info *room)
+{
+	if (room != NULL)
+	{
+		deleteList (room->next);
+		free (room);
+	}
+	else
+		return NULL;	
+}
 
 /* Main */
 gint main(int argc, char *argv[])
@@ -5233,6 +5833,7 @@ gint main(int argc, char *argv[])
 					janus_plugin->get_package(), janus_plugin->get_api_compatibility(), JANUS_PLUGIN_API_VERSION);
 				continue;
 			}
+			
 			if(janus_plugin->init(&janus_handler_plugin, configs_folder) < 0) {
 				JANUS_LOG(LOG_WARN, "The '%s' plugin could not be initialized\n", janus_plugin->get_package());
 				dlclose(plugin);
@@ -5525,3 +6126,4 @@ gint main(int argc, char *argv[])
 
 	exit(0);
 }
+
